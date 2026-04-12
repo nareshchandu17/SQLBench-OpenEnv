@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
 # Copy and install Python dependencies (separate layer for cache efficiency)
 COPY requirements.txt .
 COPY pyproject.toml .
+COPY uv.lock .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install -e .
@@ -35,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 7860
 
 # Start the API server
-CMD ["python", "server.py"]
+CMD ["python", "server/app.py"]

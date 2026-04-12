@@ -683,7 +683,8 @@ async def list_tasks() -> Dict[str, Any]:
 
 # ── Main Handler ───────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for starting the server."""
     import uvicorn
 
     print(f"\n{'='*70}")
@@ -703,3 +704,7 @@ if __name__ == "__main__":
         port=PORT,
         log_level="info",
     )
+
+
+if __name__ == "__main__":
+    main()
