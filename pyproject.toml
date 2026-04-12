@@ -1,5 +1,5 @@
 [project]
-name = "sqlbench-openenv"
+name = "sql-query-env"
 version = "0.1.0"
 description = "OpenEnv benchmark for evaluating LLM agents on SQL debugging and query optimization tasks."
 authors = [
