@@ -173,6 +173,11 @@ class SQLQueryEnv:
         if not self._state:
             raise RuntimeError("Call reset() first.")
         return self._state
+
+    def close(self):
+        """Cleanup resources."""
+        if hasattr(self, "_db"):
+            self._db.teardown()
     
     # ── Private helpers ───────────────────────────────────────────────────────
     

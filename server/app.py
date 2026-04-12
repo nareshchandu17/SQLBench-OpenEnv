@@ -20,9 +20,9 @@ from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from env.environment import SQLQueryEnv
-from env.models import SQLAction
-from env.tasks import TASKS, TASK_INDEX
+from sql_query_env.environment import SQLQueryEnv
+from sql_query_env.models import SQLAction
+from sql_query_env.tasks import TASKS, TASK_INDEX
 
 # ── Configuration ──────────────────────────────────────────────────────────
 

@@ -25,8 +25,8 @@ from openai import OpenAI
 load_dotenv()
 
 sys.path.insert(0, os.path.dirname(__file__))
-from env.environment import SQLQueryEnv
-from env.models import SQLAction
+from sql_query_env.environment import SQLQueryEnv
+from sql_query_env.models import SQLAction
 
 # --- Configuration ---
 API_BASE_URL = os.getenv("API_BASE_URL")
@@ -42,7 +42,7 @@ if not HF_TOKEN or HF_TOKEN.strip() == "":
     HF_TOKEN = os.getenv("OPENROUTER_API_KEY", "dummy")
 
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
-VERSION = "1.0.1-resilient"
+VERSION = "1.0.2-resilient"
 
 MAX_STEPS   = 5
 MAX_TOKENS  = 512
@@ -169,8 +169,9 @@ def run_baseline() -> int:
         })
         print(f"[END] success={str(solved).lower()} steps={steps} score={episode_score:.2f} rewards={','.join([f'{r:.2f}' for r in all_rewards])}")
 
-    # Summary
-    env.close()
+    # Summary: defensive cleanup
+    if hasattr(env, "close"):
+        env.close()
     avg = sum(r["episode_score"] for r in results) / len(results)
     print(f"\n{'='*60}")
     print(f"  BASELINE RESULTS")

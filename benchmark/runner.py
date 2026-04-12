@@ -28,8 +28,8 @@ from openai import OpenAI
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from env.environment import SQLQueryEnv
-from env.models import SQLAction
+from sql_query_env.environment import SQLQueryEnv
+from sql_query_env.models import SQLAction
 from benchmark.error_taxonomy import ErrorCounts, classify_error
 
 # ── Rate Limit Protection ───────────────────────────────────────────────────
