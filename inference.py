@@ -42,6 +42,7 @@ if not HF_TOKEN or HF_TOKEN.strip() == "":
     HF_TOKEN = os.getenv("OPENROUTER_API_KEY", "dummy")
 
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
+VERSION = "1.0.1-resilient"
 
 MAX_STEPS   = 5
 MAX_TOKENS  = 512
@@ -93,6 +94,9 @@ def extract_sql(text: str) -> str:
 
 def run_baseline() -> int:
     """Single-model baseline. Always runs. Used by hackathon validator."""
+    print(f"\n[INIT] SQLBench-OpenEnv Baseline (version: {VERSION})")
+    print(f"[INIT] Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
     try:
         client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
     except Exception as e:
