@@ -149,10 +149,10 @@ def run_baseline() -> int:
             episode_score = info["episode_score"]
             solved = info["solved"]
             steps = step + 1
-            all_rewards.append(reward.score)
+            all_rewards.append(reward.value)
             
             print(f"    Step {steps}: score={episode_score:.3f} | {'SOLVED' if solved else 'continuing'}")
-            print(f"[STEP] step={steps} action={sql.replace(chr(10), ' ')} reward={reward.score:.2f} done={str(done).lower()} error={obs.error_message or 'null'}")
+            print(f"[STEP] step={steps} action={sql.replace(chr(10), ' ')} reward={reward.value:.2f} done={str(done).lower()} error={obs.error_message or 'null'}")
             if done:
                 break
 
