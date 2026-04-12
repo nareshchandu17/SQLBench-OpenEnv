@@ -1,0 +1,22 @@
+[project]
+name = "sqlbench-openenv"
+version = "0.1.0"
+description = "OpenEnv benchmark for evaluating LLM agents on SQL debugging and query optimization tasks."
+authors = [
+  { name="Naresh Chandu" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "openenv-core",
+  "openai",
+  "python-dotenv",
+  "pyyaml"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
