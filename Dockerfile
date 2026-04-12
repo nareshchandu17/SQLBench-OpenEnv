@@ -7,6 +7,9 @@ LABEL openenv="true"
 # Set working directory
 WORKDIR /app
 
+# Set PYTHONPATH to include the root directory for module discovery
+ENV PYTHONPATH=/app
+
 # Install system dependencies first (cached layer)
 RUN apt-get update && apt-get install -y \
     curl \
@@ -35,5 +38,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Expose port (HF Spaces uses 7860)
 EXPOSE 7860
 
-# Start the API server
-CMD ["python", "server/app.py"]
+# Start the API server using module syntax to ensure proper path discovery
+CMD ["python", "-m", "server.app"]
