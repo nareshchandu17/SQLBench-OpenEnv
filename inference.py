@@ -37,12 +37,14 @@ MODEL_NAME = os.getenv("MODEL_NAME")
 if not MODEL_NAME or MODEL_NAME.strip() == "":
     MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+HF_TOKEN = os.getenv("API_KEY") # Prioritize injected API_KEY
+if not HF_TOKEN or HF_TOKEN.strip() == "":
+    HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN or HF_TOKEN.strip() == "":
     HF_TOKEN = os.getenv("OPENROUTER_API_KEY", "dummy")
 
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
-VERSION = "1.0.2-resilient"
+VERSION = "1.0.3-resilient"
 
 MAX_STEPS   = 5
 MAX_TOKENS  = 512
