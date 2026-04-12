@@ -28,14 +28,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 
-# --- Configuration: STRICT PROXY ADHERENCE ---
-# Use names directly from validator "How to fix"
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://openrouter.ai/api/v1"
-API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN") or os.getenv("OPENROUTER_API_KEY", "dummy")
+# --- Configuration: FINAL PROXY ALIGNMENT ---
+# Strictly using names and access method required by the validator
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY      = os.environ["API_KEY"]
+MODEL_NAME   = os.environ["MODEL_NAME"]
 
-MODEL_NAME = os.getenv("MODEL_NAME") or "meta-llama/llama-3.3-70b-instruct"
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
-VERSION = "1.0.4-strict"
+VERSION = "1.0.5-final-proxy"
 
 MAX_STEPS   = 5
 MAX_TOKENS  = 512
@@ -91,7 +91,10 @@ def run_baseline() -> int:
     print(f"[INIT] Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
-        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+        client = OpenAI(
+            base_url=API_BASE_URL,
+            api_key=API_KEY
+        )
     except Exception as e:
         print(f"Error initializing OpenAI client: {e}")
         # Fallback for validator environment if needed

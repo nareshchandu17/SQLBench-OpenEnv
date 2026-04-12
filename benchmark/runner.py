@@ -136,11 +136,8 @@ class BenchmarkRunner:
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
 
-        self.api_base_url = api_base_url or os.getenv(
-            "API_BASE_URL", "https://openrouter.ai/api/v1"
-        )
-        # Use strict priority: api_key passed in, then API_KEY (validator), then fallbacks
-        self.default_api_key = api_key or os.getenv("API_KEY") or os.getenv("HF_TOKEN") or os.getenv("OPENROUTER_API_KEY") or ""
+        self.api_base_url = api_base_url or os.environ["API_BASE_URL"]
+        self.default_api_key = api_key or os.environ["API_KEY"]
         # Don't create shared env — each thread will create its own
         # to avoid SQLite threading issues
         self.max_steps = self.config["settings"]["max_steps_per_episode"]
