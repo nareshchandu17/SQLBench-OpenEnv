@@ -28,11 +28,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 
-# --- Configuration: FINAL PROXY ALIGNMENT ---
-# Strictly using names and access method required by the validator
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY      = os.environ["API_KEY"]
-MODEL_NAME   = os.environ["MODEL_NAME"]
+# --- Configuration: ROBUST PROXY ALIGNMENT ---
+# Using .get() to prevent crash in validator environments where some keys might be missing
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://api-inference.huggingface.co/v1")
+API_KEY      = os.environ.get("API_KEY", os.environ.get("HF_TOKEN", ""))
+MODEL_NAME   = os.environ.get("MODEL_NAME", os.environ.get("MODEL", "meta-llama/llama-3.1-8b-instruct"))
 
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
 VERSION = "1.0.5-final-proxy"

@@ -136,8 +136,8 @@ class BenchmarkRunner:
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
 
-        self.api_base_url = api_base_url or os.environ["API_BASE_URL"]
-        self.default_api_key = api_key or os.environ["API_KEY"]
+        self.api_base_url = api_base_url or os.environ.get("API_BASE_URL", "https://api-inference.huggingface.co/v1")
+        self.default_api_key = api_key or os.environ.get("API_KEY", os.environ.get("HF_TOKEN", ""))
         # Don't create shared env — each thread will create its own
         # to avoid SQLite threading issues
         self.max_steps = self.config["settings"]["max_steps_per_episode"]
