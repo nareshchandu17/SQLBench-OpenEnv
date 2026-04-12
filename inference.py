@@ -28,23 +28,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 
-# --- Configuration ---
-API_BASE_URL = os.getenv("API_BASE_URL")
-if not API_BASE_URL or API_BASE_URL.strip() == "":
-    API_BASE_URL = "https://openrouter.ai/api/v1"
+# --- Configuration: STRICT PROXY ADHERENCE ---
+# Use names directly from validator "How to fix"
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://openrouter.ai/api/v1"
+API_KEY = os.getenv("API_KEY") or os.getenv("HF_TOKEN") or os.getenv("OPENROUTER_API_KEY", "dummy")
 
-MODEL_NAME = os.getenv("MODEL_NAME")
-if not MODEL_NAME or MODEL_NAME.strip() == "":
-    MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
-
-HF_TOKEN = os.getenv("API_KEY") # Prioritize injected API_KEY
-if not HF_TOKEN or HF_TOKEN.strip() == "":
-    HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN or HF_TOKEN.strip() == "":
-    HF_TOKEN = os.getenv("OPENROUTER_API_KEY", "dummy")
-
+MODEL_NAME = os.getenv("MODEL_NAME") or "meta-llama/llama-3.3-70b-instruct"
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
-VERSION = "1.0.3-resilient"
+VERSION = "1.0.4-strict"
 
 MAX_STEPS   = 5
 MAX_TOKENS  = 512
@@ -100,7 +91,7 @@ def run_baseline() -> int:
     print(f"[INIT] Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
-        client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     except Exception as e:
         print(f"Error initializing OpenAI client: {e}")
         # Fallback for validator environment if needed
@@ -200,7 +191,7 @@ def run_benchmark() -> int:
     runner = BenchmarkRunner(
         config_path="benchmark/models.yaml",
         api_base_url=API_BASE_URL,
-        api_key=HF_TOKEN,
+        api_key=API_KEY,
     )
     results = runner.run()
     leaderboard = generate_leaderboard(results, output_dir="benchmark_output")
