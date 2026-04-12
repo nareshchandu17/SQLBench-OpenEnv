@@ -28,9 +28,19 @@ sys.path.insert(0, os.path.dirname(__file__))
 from env.environment import SQLQueryEnv
 from env.models import SQLAction
 
-API_BASE_URL   = os.getenv("API_BASE_URL", "https://openrouter.ai/api/v1")
-MODEL_NAME     = os.getenv("MODEL_NAME", "meta-llama/llama-3.3-70b-instruct")
-HF_TOKEN       = os.getenv("HF_TOKEN")
+# --- Configuration ---
+API_BASE_URL = os.getenv("API_BASE_URL")
+if not API_BASE_URL or API_BASE_URL.strip() == "":
+    API_BASE_URL = "https://openrouter.ai/api/v1"
+
+MODEL_NAME = os.getenv("MODEL_NAME")
+if not MODEL_NAME or MODEL_NAME.strip() == "":
+    MODEL_NAME = "meta-llama/llama-3.3-70b-instruct"
+
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN or HF_TOKEN.strip() == "":
+    HF_TOKEN = os.getenv("OPENROUTER_API_KEY", "dummy")
+
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"
 
 MAX_STEPS   = 5
@@ -83,7 +93,13 @@ def extract_sql(text: str) -> str:
 
 def run_baseline() -> int:
     """Single-model baseline. Always runs. Used by hackathon validator."""
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or "dummy")
+    try:
+        client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+    except Exception as e:
+        print(f"Error initializing OpenAI client: {e}")
+        # Fallback for validator environment if needed
+        client = None
+
     env = SQLQueryEnv(seed=42)
     results = []
 
@@ -106,6 +122,9 @@ def run_baseline() -> int:
             
             raw = ""
             for attempt in range(MAX_RETRIES):
+                if client is None:
+                    print(f"Error: OpenAI client is not initialized. Skipping task.")
+                    break
                 try:
                     resp = client.chat.completions.create(
                         model=MODEL_NAME,
@@ -116,15 +135,13 @@ def run_baseline() -> int:
                     raw = resp.choices[0].message.content or ""
                     break # Success!
                 except Exception as e:
-                    err_msg = str(e)
-                    if "429" in err_msg or "rate limit" in err_msg.lower():
-                        if attempt < MAX_RETRIES - 1:
-                            print(f"    Rate limit hit. Retrying in {RETRY_WAIT}s... (Attempt {attempt+1}/{MAX_RETRIES})")
-                            time.sleep(RETRY_WAIT)
-                            continue
-                    print(f"    API error: {e}")
-                    raw = "SELECT 1"
-                    break
+                    print(f"  [RETRY {attempt+1}/{MAX_RETRIES}] Error calling API: {e}")
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(RETRY_WAIT)
+                    else:
+                        print("  [FAIL] Max retries reached.")
+                        raw = "SELECT 1"
+                        break
 
             sql = extract_sql(raw)
             messages.append({"role": "assistant", "content": raw})
