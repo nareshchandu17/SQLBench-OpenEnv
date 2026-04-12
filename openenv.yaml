@@ -1,0 +1,98 @@
+name: sql-query-env
+version: "1.0.0"
+description: >
+  A reinforcement learning environment where an AI agent debugs and
+  optimizes SQL queries against an in-memory SQLite database.
+  Models a real-world data engineering task with deterministic graders.
+
+author: "your-hf-username"
+license: "MIT"
+
+observation_space:
+  type: object
+  description: "Schema definition, broken query, error message, and step history"
+  properties:
+    schema_ddl:
+      type: string
+      description: "CREATE TABLE statements defining the database schema"
+    broken_query:
+      type: string
+      description: "The SQL query that needs to be fixed"
+    error_message:
+      type: string
+      description: "SQLite error from last attempted execution, empty if none"
+    expected_description:
+      type: string
+      description: "Natural language description of what the correct query should return"
+    step_count:
+      type: integer
+      description: "Number of steps taken in this episode"
+    previous_attempts:
+      type: array
+      items:
+        type: string
+      description: "List of previously submitted queries in this episode"
+
+action_space:
+  type: object
+  description: "Agent submits a fixed SQL query"
+  properties:
+    query:
+      type: string
+      description: "The corrected SQL query to execute"
+
+reward_space:
+  type: object
+  properties:
+    value:
+      type: number
+      minimum: -1.0
+      maximum: 1.0
+    breakdown:
+      type: object
+      description: "Partial scores for each grading component"
+
+  - id: fix_syntax_simple
+    name: "Fix Syntax Error (Basic)"
+    difficulty: easy
+    description: "Correct a SQL query with a syntax error that prevents column retrieval."
+    max_steps: 5
+    
+  - id: fix_table_name
+    name: "Fix Table Reference"
+    difficulty: easy
+    description: "Correct a misspelled table name in the baseline query."
+    max_steps: 5
+
+  - id: fix_join_logic
+    name: "Fix Incorrect JOIN"
+    difficulty: medium
+    description: "Identify and fix an incorrect relate condition in a JOIN clause."
+    max_steps: 8
+
+  - id: fix_aggregate_logic
+    name: "Fix Aggregate Filtering"
+    difficulty: medium
+    description: "Fix GROUP BY and HAVING logic to correctly summarize regional data."
+    max_steps: 8
+
+  - id: multi_constraint_query
+    name: "Advanced Personnel Query"
+    difficulty: hard
+    description: "Fix a query with multiple logic errors involving headcount and average salary constraints."
+    max_steps: 10
+
+  - id: ecommerce_supply_chain
+    name: "Complex E-commerce Debugging"
+    difficulty: hard
+    description: "Debug a complex triple-join query involving users, orders, and products with aggregation filters."
+    max_steps: 12
+
+tags:
+  - sql
+  - data-engineering
+  - code-debugging
+  - real-world
+  - deterministic
+
+api_version: "0.1.0"

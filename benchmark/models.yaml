@@ -1,0 +1,55 @@
+# benchmark/models.yaml
+# Models evaluated in the SQLBench-OpenEnv benchmark.
+# All accessed via OpenAI-compatible client.
+# Add / remove models freely — the runner iterates this list.
+
+benchmark_name: "SQLBench-OpenEnv"
+version: "1.0.0"
+description: >
+  Evaluation of LLM capability on SQL correction and optimization tasks.
+  Covers syntax repair, join logic, aggregation correctness, and query efficiency.
+
+models:
+  - id: "llama-3.3-70b"
+    name: "Llama 3.3 70B"
+    model_string: "meta-llama/llama-3.3-70b-instruct"
+    provider: "openrouter"
+    api_key_env: "LLAMA_API_KEY"
+    max_tokens: 512
+    temperature: 0.1
+
+  - id: "dolphin-mistral-24b"
+    name: "Dolphin Mistral 24B"
+    model_string: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+    provider: "openrouter"
+    api_key_env: "DOLPHIN_API_KEY"
+    max_tokens: 512
+    temperature: 0.1
+
+  - id: "gemma-27b"
+    name: "Gemma 27B"
+    model_string: "google/gemma-2-27b-it"
+    provider: "openrouter"
+    api_key_env: "GEMMA_API_KEY"
+    max_tokens: 512
+    temperature: 0.1
+
+# Tasks to include in the benchmark run.
+# Maps to task IDs in env/tasks.py.
+benchmark_tasks:
+  easy:
+    - fix_syntax_simple
+    - fix_table_name
+  medium:
+    - fix_join_logic
+    - fix_aggregate_logic
+  hard:
+    - multi_constraint_query
+    - fix_nested_subquery_logic
+
+# Evaluation settings
+settings:
+  max_steps_per_episode: 5     # Keep fast — 3 models × 5 tasks × 5 steps = 75 API calls max
+  runs_per_task: 1             # For reproducibility; increase to 3 for variance analysis
+  seed: 42
+  timeout_seconds: 300         # Per-task wall-clock timeout

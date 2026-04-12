@@ -1,0 +1,24 @@
+# Generated benchmark results — committed as seeds, overwritten at runtime
+# Uncomment the lines below if you want to exclude runtime output entirely
+# benchmark_output/benchmark_results.json
+# benchmark_output/leaderboard.json
+# benchmark_output/error_taxonomy.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/
+*.swp
