@@ -1,5 +1,5 @@
 ---
-title: My Openenv
+title: SQLBench-OpenEnv
 emoji: 🦀
 colorFrom: indigo
 colorTo: blue
@@ -229,7 +229,7 @@ and consume a step.
 | `fix_join_logic` | medium | 8 | Wrong JOIN column |
 | `fix_aggregate_logic` | medium | 8 | Wrong GROUP BY column |
 | `multi_constraint_query` | hard | 10 | Four simultaneous errors |
-| `fix_nested_subquery_logic` | hard | 10 | Invalid aggregation in subquery |
+| `ecommerce_supply_chain` | hard | 12 | Complex multi-table join |
 
 See [BENCHMARK_CARD.md](BENCHMARK_CARD.md) for full task descriptions
 and grader design.
@@ -372,7 +372,7 @@ sql-query-env/
 ├── README.md
 ├── BENCHMARK_CARD.md         Research-style benchmark documentation
 │
-├── env/
+├── sql_query_env/
 │   ├── environment.py        SQLQueryEnv (reset/step/state)
 │   ├── models.py             Pydantic observation/action/reward models
 │   ├── tasks.py              Task definitions

@@ -9,6 +9,10 @@ openenv-core==0.1.0
 # LLM client (for inference.py)
 openai==1.35.0
 
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
 # Utilities
 python-dotenv==1.0.1
 pyyaml==6.0.1
