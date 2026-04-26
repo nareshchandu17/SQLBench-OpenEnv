@@ -1,0 +1,17 @@
+# Hugging Face Spaces Configuration
+title: SQLBench-OpenEnv
+emoji: 🏆
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.44.0
+app_file: app.py
+pinned: true
+license: mit
+tags:
+- sql
+- benchmark
+- llm
+- evaluation
+- openenv
+short_description: Comprehensive SQL benchmarking platform for LLM evaluation

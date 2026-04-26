@@ -22,3 +22,8 @@ venv/
 .vscode/
 .idea/
 *.swp
+
+# Hugging Face Spaces
+*.log
+*.cache
+.huggingface/
