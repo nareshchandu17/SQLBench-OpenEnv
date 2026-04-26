@@ -4,8 +4,8 @@ Quick API test to verify OpenRouter connectivity before running full benchmark.
 """
 
 import os
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -19,25 +19,37 @@ def test_openrouter_api():
         print("❌ OPENROUTER_API_KEY not configured in .env")
         return False
     
-    # Create client
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
+    # Setup headers for direct HTTP request
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     
     # Test with a simple model
     try:
         print("🧪 Testing OpenRouter API...")
-        response = client.chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[{"role": "user", "content": "Say 'API test successful'"}],
-            max_tokens=50,
-            temperature=0.1,
+        payload = {
+            "model": "openai/gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Say 'API test successful'"}],
+            "max_tokens": 50,
+            "temperature": 0.1,
+        }
+        
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30
         )
         
-        result = response.choices[0].message.content
-        print(f"✅ API Response: {result}")
-        return True
+        if response.status_code == 200:
+            data = response.json()
+            result = data["choices"][0]["message"]["content"]
+            print(f"✅ API Response: {result}")
+            return True
+        else:
+            print(f"❌ HTTP {response.status_code}: {response.text}")
+            return False
         
     except Exception as e:
         print(f"❌ API Error: {e}")
@@ -50,10 +62,11 @@ def test_model_access():
     if not api_key:
         return False
     
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
+    # Setup headers for direct HTTP request
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     
     models = [
         "meta-llama/llama-3.3-70b-instruct",
@@ -64,13 +77,24 @@ def test_model_access():
     print("\n🔍 Testing model access...")
     for model in models:
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=10,
-                temperature=0.1,
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 10,
+                "temperature": 0.1,
+            }
+            
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
             )
-            print(f"✅ {model}: Available")
+            
+            if response.status_code == 200:
+                print(f"✅ {model}: Available")
+            else:
+                print(f"❌ {model}: HTTP {response.status_code}")
         except Exception as e:
             print(f"❌ {model}: {e}")
 

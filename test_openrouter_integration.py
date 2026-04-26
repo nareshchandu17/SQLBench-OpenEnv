@@ -10,12 +10,12 @@ import requests
 import json
 import time
 from datetime import datetime
+from dotenv import load_dotenv
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from benchmark.runner import BenchmarkRunner
-from openai import OpenAI
 
 # Test configuration
 API_BASE_URL = "https://openrouter.ai/api/v1"

@@ -10,12 +10,13 @@ import time
 import threading
 from datetime import datetime
 from collections import defaultdict
+import requests
+from dotenv import load_dotenv
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from benchmark.runner import BenchmarkRunner, throttle, retry_with_backoff
-from openai import OpenAI
 
 class RateLimitStressTest:
     """Comprehensive rate limiting stress test suite."""
