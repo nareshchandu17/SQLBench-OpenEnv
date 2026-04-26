@@ -1,0 +1,55 @@
+{
+  "benchmark": "SQLBench-OpenEnv",
+  "timestamp": "2026-04-26T05:02:34.255708+00:00",
+  "description": "Rate of each error category per model. Rates sum to 1.0 across all categories including success.",
+  "categories": [
+    "syntax_error",
+    "reference_error",
+    "join_error",
+    "aggregation_error",
+    "logic_error",
+    "ordering_error",
+    "success"
+  ],
+  "models": {
+    "llama-3.3-70b": {
+      "model_name": "Llama 3.3 70B",
+      "error_rates": {
+        "syntax_error": 0.0,
+        "reference_error": 0.0,
+        "join_error": 0.5,
+        "aggregation_error": 0.167,
+        "logic_error": 0.333,
+        "ordering_error": 0.0,
+        "success": 0.0
+      },
+      "total_attempts": 6
+    },
+    "dolphin-mistral-24b": {
+      "model_name": "Dolphin Mistral 24B",
+      "error_rates": {
+        "syntax_error": 0.0,
+        "reference_error": 0.0,
+        "join_error": 0.5,
+        "aggregation_error": 0.167,
+        "logic_error": 0.333,
+        "ordering_error": 0.0,
+        "success": 0.0
+      },
+      "total_attempts": 6
+    },
+    "gemma-27b": {
+      "model_name": "Gemma 27B",
+      "error_rates": {
+        "syntax_error": 0.0,
+        "reference_error": 0.0,
+        "join_error": 0.5,
+        "aggregation_error": 0.167,
+        "logic_error": 0.333,
+        "ordering_error": 0.0,
+        "success": 0.0
+      },
+      "total_attempts": 6
+    }
+  }
+}

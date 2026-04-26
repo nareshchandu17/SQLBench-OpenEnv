@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import time
+import random
 import textwrap
 import traceback
 from pathlib import Path
@@ -22,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 import yaml
-from openai import OpenAI
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,9 +34,54 @@ from sql_query_env.models import SQLAction
 from benchmark.error_taxonomy import ErrorCounts, classify_error
 
 # ── Rate Limit Protection ───────────────────────────────────────────────────
-RATE_LIMIT_DELAY = 8  # Seconds between API calls
-MAX_RETRIES = 3       # Max retries for 429 errors
-RETRY_WAIT = 10       # Seconds to wait between retries
+LAST_REQUEST_TIME = 0
+MIN_INTERVAL = 2  # Minimum seconds between requests
+
+def throttle():
+    """Global throttling to prevent request bursts."""
+    global LAST_REQUEST_TIME
+    now = time.time()
+    elapsed = now - LAST_REQUEST_TIME
+    if elapsed < MIN_INTERVAL:
+        time.sleep(MIN_INTERVAL - elapsed)
+    LAST_REQUEST_TIME = time.time()
+
+def retry_with_backoff(api_call, model_name: str, max_retries: int = 5):
+    """
+    Production-grade retry with exponential backoff and rate limit awareness.
+    """
+    for attempt in range(max_retries):
+        try:
+            return api_call()
+        except Exception as e:
+            err_msg = str(e)
+            
+            # Check for rate limit errors
+            if "429" in err_msg or "rate limit" in err_msg.lower():
+                # Exponential backoff with jitter (capped at 60s)
+                wait = min(60, (2 ** attempt) + random.uniform(0, 1))
+                
+                # Check for Retry-After header if available
+                if hasattr(e, 'response') and hasattr(e.response, 'headers'):
+                    retry_after = e.response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            wait = max(wait, float(retry_after))
+                        except ValueError:
+                            pass
+                
+                print(f"[RETRY] {model_name} | Attempt {attempt + 1}/{max_retries} | Rate limited. Waiting {wait:.2f}s...")
+                time.sleep(wait)
+                
+                if attempt == max_retries - 1:
+                    raise Exception(f"Max retries exceeded for {model_name} due to rate limiting")
+            else:
+                # Non-rate-limit error, re-raise immediately
+                raise
+    
+    raise Exception(f"Max retries exceeded for {model_name}")
+
+MAX_RETRIES = 5  # Increased for better resilience
 
 # ── Prompt (identical across all models for fair comparison) ──────────────────
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -136,8 +182,17 @@ class BenchmarkRunner:
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
 
-        self.api_base_url = api_base_url or os.environ.get("API_BASE_URL", "https://api-inference.huggingface.co/v1")
-        self.default_api_key = api_key or os.environ.get("API_KEY", os.environ.get("HF_TOKEN", ""))
+        # Use global provider config from YAML
+        self.api_base_url = api_base_url or self.config.get("base_url", "https://openrouter.ai/api/v1")
+        
+        # Load global API key (gateway pattern)
+        api_key_env = self.config.get("api_key_env", "OPENROUTER_API_KEY")
+        self.default_api_key = api_key or os.environ.get(api_key_env)
+        
+        if not self.default_api_key:
+            raise ValueError(f"Missing required environment variable: {api_key_env}")
+        
+        print(f"[DEBUG] Using API key: {self.default_api_key[:8]}...")
         # Don't create shared env — each thread will create its own
         # to avoid SQLite threading issues
         self.max_steps = self.config["settings"]["max_steps_per_episode"]
@@ -151,28 +206,25 @@ class BenchmarkRunner:
                     {"id": task_id, "difficulty": difficulty}
                 )
 
-    def _make_client(self, model_cfg: Dict) -> OpenAI:
-        """Create OpenAI client with model-specific API key."""
-        # If model specifies api_key_env, use that; otherwise fall back to default
-        api_key = ""
+    def _make_client_config(self, model_cfg: Dict) -> Dict:
+        """Create HTTP client config using global gateway pattern."""
+        # Backward compatibility warning
         if "api_key_env" in model_cfg:
-            api_key = os.getenv(model_cfg["api_key_env"], "")
+            print(f"      ⚠ Warning: Per-model API keys are deprecated. Using global gateway.")
         
-        # Fall back to default key if model-specific key not found
-        if not api_key:
-            api_key = self.default_api_key
-        
-        if not api_key or api_key == "dummy":
-            print(f"      ⚠ Warning: No API key found for {model_cfg['name']}. Using 'dummy' (will likely 401).")
-
-        return OpenAI(
-            base_url=self.api_base_url,
-            api_key=api_key or "dummy",
-        )
+        # All models use the same global API key (gateway pattern)
+        return {
+            "base_url": self.api_base_url,
+            "api_key": self.default_api_key,
+            "headers": {
+                "Authorization": f"Bearer {self.default_api_key}",
+                "Content-Type": "application/json"
+            }
+        }
 
     def _run_episode(
         self,
-        client: OpenAI,
+        client_config: Dict,
         model_cfg: Dict,
         task_id: str,
         difficulty: str,
@@ -200,33 +252,49 @@ class BenchmarkRunner:
 
         api_errors = []
         for step in range(self.max_steps):
-            # 1. Enforce delay before every API call
-            time.sleep(RATE_LIMIT_DELAY)
+            # 1. Apply global throttling
+            throttle()
             
             messages.append({"role": "user", "content": build_user_prompt(obs)})
 
+            # 2. Make API call with exponential backoff
             raw = ""
-            for attempt in range(MAX_RETRIES):
-                try:
-                    resp = client.chat.completions.create(
-                        model=model_cfg["model_string"],
-                        messages=messages,
-                        max_tokens=model_cfg.get("max_tokens", 512),
-                        temperature=model_cfg.get("temperature", 0.1),
-                    )
-                    raw = resp.choices[0].message.content or ""
-                    break # Success!
-                except Exception as e:
-                    err_msg = str(e)
-                    # Check if it's a rate limit error (HTTP 429)
-                    if "429" in err_msg or "rate limit" in err_msg.lower():
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(RETRY_WAIT)
-                            continue
+            try:
+                def api_call():
+                    payload = {
+                        "model": model_cfg["model_string"],
+                        "messages": messages,
+                        "max_tokens": model_cfg.get("max_tokens", 512),
+                        "temperature": model_cfg.get("temperature", 0.1),
+                    }
                     
-                    api_errors.append(f"Step {step+1} (Attempt {attempt+1}): {err_msg}")
+                    resp = requests.post(
+                        f"{client_config['base_url']}/chat/completions",
+                        headers=client_config["headers"],
+                        json=payload,
+                        timeout=30
+                    )
+                    
+                    if resp.status_code == 200:
+                        return resp.json()
+                    else:
+                        raise Exception(f"HTTP {resp.status_code}: {resp.text}")
+                
+                data = retry_with_backoff(api_call, model_cfg["name"])
+                raw = data["choices"][0]["message"]["content"] or ""
+                
+            except Exception as e:
+                err_msg = str(e)
+                if "Max retries exceeded" in err_msg:
+                    # Rate limit exhaustion - mark as rate limited but continue
+                    api_errors.append(f"Step {step+1}: Rate limited after max retries")
                     raw = f"SELECT * FROM sqlite_master LIMIT 0"
-                    break # Generic error or max retries
+                    print(f"[RATE_LIMITED] {model_cfg['name']} - Step {step+1} exhausted rate limits")
+                else:
+                    # Other API error
+                    api_errors.append(f"Step {step+1}: {err_msg}")
+                    raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                    break
 
             sql = extract_sql(raw)
             messages.append({"role": "assistant", "content": raw})
@@ -294,29 +362,69 @@ class BenchmarkRunner:
                 model_id=model_cfg["id"],
                 model_name=model_cfg["name"],
             )
-            client = self._make_client(model_cfg)
+            client_config = self._make_client_config(model_cfg)
 
             print(f"\n  Model: {model_cfg['name']}")
             print(f"  {'─'*50}")
 
-            # Parallel execution of tasks for this model
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                # Submit all tasks at once
-                futures = {
-                    executor.submit(
-                        self._run_episode,
-                        client,
-                        model_cfg,
-                        task_info["id"],
-                        task_info["difficulty"]
-                    ): task_info
-                    for task_info in self.benchmark_tasks
-                }
+            # Sequential execution for rate limit resilience
+            # Use parallel only for non-rate-limited scenarios
+            use_parallel = False  # Disabled for rate limit safety
+            
+            if use_parallel:
+                # Parallel execution (original approach)
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    futures = {
+                        executor.submit(
+                            self._run_episode,
+                            client_config,
+                            model_cfg,
+                            task_info["id"],
+                            task_info["difficulty"]
+                        ): task_info
+                        for task_info in self.benchmark_tasks
+                    }
 
-                # Process results as they complete
-                completed = 0
-                for future in futures:
-                    task_info = futures[future]
+                    for future in futures:
+                        task_info = futures[future]
+                        task_id = task_info["id"]
+                        difficulty = task_info["difficulty"]
+                        episode_num += 1
+
+                        print(
+                            f"  [{episode_num:02d}/{total_episodes}] "
+                            f"{task_id:<32} [{difficulty}] ...",
+                            end="",
+                            flush=True,
+                        )
+
+                        try:
+                            tr = future.result()
+                            model_result.task_results.append(tr)
+                            model_result.error_counts.add(tr.error_category)
+
+                            status = "SOLVED" if tr.solved else f"{tr.episode_score:.2f}"
+                            print(f" {status} ({tr.duration_seconds:.1f}s)")
+
+                            for err in tr.api_errors:
+                                print(f"      ⚠ API error: {err}")
+
+                        except Exception as e:
+                            print(f" ERROR: {e}")
+                            model_result.task_results.append(TaskResult(
+                                task_id=task_id,
+                                difficulty=difficulty,
+                                episode_score=0.0,
+                                steps_taken=0,
+                                solved=False,
+                                error_category="syntax_error",
+                                total_reward=0.0,
+                                duration_seconds=0.0,
+                            ))
+            else:
+                # Sequential execution (rate limit safe)
+                print(f"  [SEQUENTIAL] Running tasks sequentially for rate limit safety")
+                for task_info in self.benchmark_tasks:
                     task_id = task_info["id"]
                     difficulty = task_info["difficulty"]
                     episode_num += 1
@@ -329,21 +437,18 @@ class BenchmarkRunner:
                     )
 
                     try:
-                        tr = future.result()
+                        tr = self._run_episode(client_config, model_cfg, task_id, difficulty)
                         model_result.task_results.append(tr)
                         model_result.error_counts.add(tr.error_category)
 
                         status = "SOLVED" if tr.solved else f"{tr.episode_score:.2f}"
                         print(f" {status} ({tr.duration_seconds:.1f}s)")
-                        
-                        # Print buffered API errors cleanly
+
                         for err in tr.api_errors:
                             print(f"      ⚠ API error: {err}")
 
                     except Exception as e:
                         print(f" ERROR: {e}")
-                        traceback.print_exc()
-                        # Record zero score so benchmark doesn't abort
                         model_result.task_results.append(TaskResult(
                             task_id=task_id,
                             difficulty=difficulty,
@@ -354,11 +459,6 @@ class BenchmarkRunner:
                             total_reward=0.0,
                             duration_seconds=0.0,
                         ))
-
-                    # Safety: abort if approaching 18-minute wall clock
-                    elapsed = time.time() - wall_start
-                    if elapsed > 18 * 60:
-                        print(f"\n  WARNING: Approaching 20-min limit. Stopping early.")
                         results.append(model_result)
                         return results
 

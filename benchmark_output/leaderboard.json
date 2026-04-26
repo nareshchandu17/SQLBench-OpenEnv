@@ -1,0 +1,39 @@
+{
+  "benchmark": "SQLBench-OpenEnv",
+  "timestamp": "2026-04-26T05:02:34.255708+00:00",
+  "rankings": [
+    {
+      "rank": 1,
+      "model_id": "llama-3.3-70b",
+      "model_name": "Llama 3.3 70B",
+      "easy": 0.0,
+      "medium": 0.0,
+      "hard": 0.0,
+      "average_score": 0.0,
+      "solved_count": 0,
+      "total_tasks": 6
+    },
+    {
+      "rank": 2,
+      "model_id": "dolphin-mistral-24b",
+      "model_name": "Dolphin Mistral 24B",
+      "easy": 0.0,
+      "medium": 0.0,
+      "hard": 0.0,
+      "average_score": 0.0,
+      "solved_count": 0,
+      "total_tasks": 6
+    },
+    {
+      "rank": 3,
+      "model_id": "gemma-27b",
+      "model_name": "Gemma 27B",
+      "easy": 0.0,
+      "medium": 0.0,
+      "hard": 0.0,
+      "average_score": 0.0,
+      "solved_count": 0,
+      "total_tasks": 6
+    }
+  ]
+}

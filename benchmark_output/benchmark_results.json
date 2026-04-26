@@ -1,0 +1,205 @@
+{
+  "benchmark": "SQLBench-OpenEnv",
+  "version": "1.0.0",
+  "timestamp": "2026-04-26T05:02:34.255708+00:00",
+  "models": [
+    {
+      "model_id": "llama-3.3-70b",
+      "model_name": "Llama 3.3 70B",
+      "tasks": [
+        {
+          "task_id": "fix_syntax_simple",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 6.3
+        },
+        {
+          "task_id": "fix_table_name",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 0.1
+        },
+        {
+          "task_id": "fix_join_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.7
+        },
+        {
+          "task_id": "fix_aggregate_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "aggregation_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "multi_constraint_query",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.9
+        },
+        {
+          "task_id": "ecommerce_supply_chain",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.7
+        }
+      ]
+    },
+    {
+      "model_id": "dolphin-mistral-24b",
+      "model_name": "Dolphin Mistral 24B",
+      "tasks": [
+        {
+          "task_id": "fix_syntax_simple",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 0.6
+        },
+        {
+          "task_id": "fix_table_name",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 1.7
+        },
+        {
+          "task_id": "fix_join_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "fix_aggregate_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "aggregation_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "multi_constraint_query",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.9
+        },
+        {
+          "task_id": "ecommerce_supply_chain",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.7
+        }
+      ]
+    },
+    {
+      "model_id": "gemma-27b",
+      "model_name": "Gemma 27B",
+      "tasks": [
+        {
+          "task_id": "fix_syntax_simple",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 0.6
+        },
+        {
+          "task_id": "fix_table_name",
+          "difficulty": "easy",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "logic_error",
+          "reward": 0.0,
+          "seconds": 1.7
+        },
+        {
+          "task_id": "fix_join_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "fix_aggregate_logic",
+          "difficulty": "medium",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "aggregation_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "multi_constraint_query",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        },
+        {
+          "task_id": "ecommerce_supply_chain",
+          "difficulty": "hard",
+          "score": 0.0,
+          "solved": false,
+          "steps": 0,
+          "error_category": "join_error",
+          "reward": 0.0,
+          "seconds": 1.8
+        }
+      ]
+    }
+  ]
+}

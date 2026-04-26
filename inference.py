@@ -19,7 +19,7 @@ import textwrap
 from typing import List, Dict, Any
 
 from dotenv import load_dotenv
-from openai import OpenAI
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,7 +48,9 @@ RETRY_WAIT = 10       # Seconds to wait between retries
 
 BENCHMARK_TASKS = [
     ("fix_syntax_simple",      "easy"),
+    ("fix_table_name",         "easy"),
     ("fix_join_logic",         "medium"),
+    ("fix_aggregate_logic",    "medium"),
     ("multi_constraint_query", "hard"),
     ("ecommerce_supply_chain", "hard"),
 ]
@@ -89,16 +91,18 @@ def run_baseline() -> int:
     """Single-model baseline. Always runs. Used by hackathon validator."""
     print(f"\n[INIT] SQLBench-OpenEnv Baseline (version: {VERSION})")
     print(f"[INIT] Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Initialize HTTP client for API requests
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
     
-    try:
-        client = OpenAI(
-            base_url=API_BASE_URL,
-            api_key=API_KEY
-        )
-    except Exception as e:
-        print(f"Error initializing OpenAI client: {e}")
-        # Fallback for validator environment if needed
-        client = None
+    if not API_KEY:
+        print("Warning: No API key provided. Using fallback responses.")
+        use_fallback = True
+    else:
+        use_fallback = False
 
     env = SQLQueryEnv(seed=42)
     results = []
@@ -122,18 +126,33 @@ def run_baseline() -> int:
             
             raw = ""
             for attempt in range(MAX_RETRIES):
-                if client is None:
-                    print(f"Error: OpenAI client is not initialized. Skipping task.")
+                if use_fallback:
+                    print(f"Using fallback response (no API key)")
+                    raw = "SELECT 1 FROM dual"
                     break
                 try:
-                    resp = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=messages,
-                        max_tokens=MAX_TOKENS,
-                        temperature=TEMPERATURE,
+                    # Make direct HTTP request to API
+                    payload = {
+                        "model": MODEL_NAME,
+                        "messages": messages,
+                        "max_tokens": MAX_TOKENS,
+                        "temperature": TEMPERATURE,
+                    }
+                    
+                    resp = requests.post(
+                        f"{API_BASE_URL}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=30
                     )
-                    raw = resp.choices[0].message.content or ""
-                    break # Success!
+                    
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        raw = data["choices"][0]["message"]["content"] or ""
+                        break # Success!
+                    else:
+                        raise Exception(f"HTTP {resp.status_code}: {resp.text}")
+                        
                 except Exception as e:
                     print(f"  [RETRY {attempt+1}/{MAX_RETRIES}] Error calling API: {e}")
                     if attempt < MAX_RETRIES - 1:
