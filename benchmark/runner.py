@@ -24,7 +24,17 @@ from dotenv import load_dotenv
 import yaml
 import requests
 
-# Note: We don't load .env here to prioritize environment variables over .env file
+# Load .env FIRST to ensure API key availability
+load_dotenv()
+
+# Windows environment variable check
+if not os.getenv("OPENROUTER_API_KEY"):
+    print("⚠ WARNING: OPENROUTER_API_KEY not found in environment")
+    print("Available env vars with 'API' or 'KEY':")
+    for key, value in os.environ.items():
+        if 'API' in key.upper() or 'KEY' in key.upper():
+            print(f"  {key}: {value[:20]}..." if len(value) > 20 else f"  {key}: {value}")
+    print("")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from sql_query_env.environment import SQLQueryEnv
@@ -186,18 +196,30 @@ class BenchmarkRunner:
         # Load global API key (gateway pattern)
         # Priority: 1. Direct parameter, 2. Environment variable, 3. .env file
         api_key_env = self.config.get("api_key_env", "OPENROUTER_API_KEY")
-        self.default_api_key = api_key or os.environ.get(api_key_env, "").strip()
+        
+        # HARD DEBUG: Print full API key info
+        raw_key = os.environ.get(api_key_env, "")
+        print("DEBUG_API_KEY_FULL:", repr(raw_key))
+        print("DEBUG_API_KEY_ENV:", api_key_env)
+        
+        self.default_api_key = api_key or raw_key.strip()
         
         # If still empty, try loading from .env as fallback
         if not self.default_api_key:
+            print("WARNING: ENV not loaded, trying .env fallback")
             from dotenv import load_dotenv
             load_dotenv()
             self.default_api_key = os.environ.get(api_key_env, "").strip()
+            print("DEBUG_API_KEY_AFTER_ENV:", repr(self.default_api_key))
         
+        # SANITIZE API KEY - Add validation
         if not self.default_api_key:
             raise ValueError(f"Missing required environment variable: {api_key_env}")
         
-        print(f"[DEBUG] Using API key: {self.default_api_key[:8]}...")
+        if not self.default_api_key.startswith("sk-or-v1-"):
+            raise ValueError(f"Invalid OpenRouter API key format. Expected 'sk-or-v1-*', got: {self.default_api_key[:20]}...")
+        
+        print(f"[DEBUG] Using API key: {self.default_api_key[:8]}... (length: {len(self.default_api_key)})")
         # Don't create shared env — each thread will create its own
         # to avoid SQLite threading issues
         self.max_steps = self.config["settings"]["max_steps_per_episode"]

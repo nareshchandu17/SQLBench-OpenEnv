@@ -6,88 +6,82 @@ This report analyzes SQL query error patterns to help model developers
 understand strengths, weaknesses, and areas for improvement.
 
 Benchmark: SQLBench-OpenEnv
-Timestamp: 2026-04-26T06:07:40.987427+00:00
+Timestamp: 2026-04-26T08:48:16.007905+00:00
 
 
 ======================================================================
-Model: Dolphin Mistral 24B
+Model: Gemma 4 26B A4B (Free)
 ======================================================================
-Leaderboard Score:     0.000
+Leaderboard Score:     0.023
 Total Attempts:        6
-Primary Weakness:      join_error
+Primary Weakness:      logic_error
 
 Error Distribution:
 ──────────────────────────────────────────────────────────────────────
 syntax_error         ░░░░░░░░░░░░░░░░░░░░   0.0%
 reference_error      ░░░░░░░░░░░░░░░░░░░░   0.0%
-join_error           ██████████░░░░░░░░░░  50.0%
-aggregation_error    ███░░░░░░░░░░░░░░░░░  16.7%
-logic_error          ██████░░░░░░░░░░░░░░  33.3%
+join_error           ░░░░░░░░░░░░░░░░░░░░   0.0%
+aggregation_error    ░░░░░░░░░░░░░░░░░░░░   0.0%
+logic_error          ████████████████████ 100.0%
 ordering_error       ░░░░░░░░░░░░░░░░░░░░   0.0%
 success              ░░░░░░░░░░░░░░░░░░░░   0.0%
 
 Insight:
 ──────────────────────────────────────────────────────────────────────
-Model has difficulty with JOIN operations (50% of failures). May struggle with multi-table queries or join conditions.
+Model produces structurally valid but semantically incorrect queries (100% of failures). Needs better semantic understanding.
 
 Recommendations:
 ──────────────────────────────────────────────────────────────────────
-• Add more JOIN examples to training data
-• Enhance GROUP BY and aggregate function understanding
 • Focus on semantic SQL correctness beyond syntax
 
 ======================================================================
-Model: Gemma 27B
+Model: Ling-2.6-1T (Free)
 ======================================================================
-Leaderboard Score:     0.000
+Leaderboard Score:     0.023
 Total Attempts:        6
-Primary Weakness:      join_error
+Primary Weakness:      logic_error
 
 Error Distribution:
 ──────────────────────────────────────────────────────────────────────
 syntax_error         ░░░░░░░░░░░░░░░░░░░░   0.0%
 reference_error      ░░░░░░░░░░░░░░░░░░░░   0.0%
-join_error           ██████████░░░░░░░░░░  50.0%
-aggregation_error    ███░░░░░░░░░░░░░░░░░  16.7%
-logic_error          ██████░░░░░░░░░░░░░░  33.3%
+join_error           ░░░░░░░░░░░░░░░░░░░░   0.0%
+aggregation_error    ░░░░░░░░░░░░░░░░░░░░   0.0%
+logic_error          ████████████████████ 100.0%
 ordering_error       ░░░░░░░░░░░░░░░░░░░░   0.0%
 success              ░░░░░░░░░░░░░░░░░░░░   0.0%
 
 Insight:
 ──────────────────────────────────────────────────────────────────────
-Model has difficulty with JOIN operations (50% of failures). May struggle with multi-table queries or join conditions.
+Model produces structurally valid but semantically incorrect queries (100% of failures). Needs better semantic understanding.
 
 Recommendations:
 ──────────────────────────────────────────────────────────────────────
-• Add more JOIN examples to training data
-• Enhance GROUP BY and aggregate function understanding
 • Focus on semantic SQL correctness beyond syntax
 
 ======================================================================
-Model: Llama 3.3 70B
+Model: Ling-2.6-Flash (Free)
 ======================================================================
-Leaderboard Score:     0.000
+Leaderboard Score:     0.023
 Total Attempts:        6
-Primary Weakness:      join_error
+Primary Weakness:      logic_error
 
 Error Distribution:
 ──────────────────────────────────────────────────────────────────────
 syntax_error         ░░░░░░░░░░░░░░░░░░░░   0.0%
 reference_error      ░░░░░░░░░░░░░░░░░░░░   0.0%
-join_error           ██████████░░░░░░░░░░  50.0%
-aggregation_error    ███░░░░░░░░░░░░░░░░░  16.7%
-logic_error          ██████░░░░░░░░░░░░░░  33.3%
+join_error           ░░░░░░░░░░░░░░░░░░░░   0.0%
+aggregation_error    ░░░░░░░░░░░░░░░░░░░░   0.0%
+logic_error          ████████████████████ 100.0%
 ordering_error       ░░░░░░░░░░░░░░░░░░░░   0.0%
 success              ░░░░░░░░░░░░░░░░░░░░   0.0%
 
 Insight:
 ──────────────────────────────────────────────────────────────────────
-Model has difficulty with JOIN operations (50% of failures). May struggle with multi-table queries or join conditions.
+Model produces structurally valid but semantically incorrect queries (100% of failures). Needs better semantic understanding.
 
 Recommendations:
 ──────────────────────────────────────────────────────────────────────
-• Add more JOIN examples to training data
-• Enhance GROUP BY and aggregate function understanding
 • Focus on semantic SQL correctness beyond syntax
 
 ======================================================================
@@ -96,14 +90,10 @@ CROSS-MODEL COMPARATIVE ANALYSIS
 
 Most Common Failure Modes (% of models affected):
 ──────────────────────────────────────────────────────────────────────
-join_error                100.0% of models struggle here
-aggregation_error         100.0% of models struggle here
 logic_error               100.0% of models struggle here
 
 Industry Insight:
 ──────────────────────────────────────────────────────────────────────
-• JOINs are a systematic weakness across all tested models
-• Aggregation is challenging for language models
 • Semantic SQL understanding needs improvement across the board
 
 Recommendation for Deployment:

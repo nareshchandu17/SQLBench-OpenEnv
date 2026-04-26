@@ -114,7 +114,56 @@ def generate_leaderboard(
     with open(f"{output_dir}/error_taxonomy.json", "w") as f:
         json.dump(taxonomy, f, indent=2)
 
+    save_leaderboard(leaderboard, output_dir)
+
     return leaderboard
+
+
+def generate_error_taxonomy(
+    results: List[ModelResult],
+    output_dir: str = "benchmark_output",
+) -> Dict[str, Any]:
+    """Generate error taxonomy analysis for models."""
+    Path(output_dir).mkdir(exist_ok=True)
+    
+    taxonomy = {
+        "benchmark": "SQLBench-OpenEnv",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "description": (
+            "Rate of each error category per model. "
+            "Rates sum to 1.0 across all categories including success."
+        ),
+        "categories": ERROR_CATEGORIES,
+        "models": {},
+    }
+    for mr in results:
+        taxonomy["models"][mr.model_id] = {
+            "model_name": mr.model_name,
+            "error_rates": mr.error_counts.to_dict(),
+            "total_attempts": mr.error_counts.total,
+        }
+
+    try:
+        with open(f"{output_dir}/error_taxonomy.json", "w") as f:
+            json.dump(taxonomy, f, indent=2)
+    except IOError as e:
+        print(f"Warning: Could not write error taxonomy: {e}")
+    
+    return taxonomy
+
+
+def save_leaderboard(leaderboard: Dict[str, Any], output_dir: str = "benchmark_output") -> None:
+    """Save leaderboard to JSON file (separate function for compatibility)."""
+    import json
+    from pathlib import Path
+    
+    Path(output_dir).mkdir(exist_ok=True)
+    
+    try:
+        with open(f"{output_dir}/leaderboard.json", "w") as f:
+            json.dump(leaderboard, f, indent=2)
+    except IOError as e:
+        print(f"Warning: Could not write leaderboard: {e}")
 
 
 def print_leaderboard(leaderboard: Dict[str, Any]) -> None:

@@ -1,7 +1,6 @@
-# benchmark/models.yaml
-# Models evaluated in the SQLBench-OpenEnv benchmark.
-# Single API gateway pattern - all models use shared authentication.
-# Add / remove models freely â€” the runner iterates this list.
+# benchmark/models.yaml - SINGLE FREE MODEL
+# SQLBench-OpenEnv benchmark configuration
+# Uses Ling-2.6-1T (free) model that works without credits
 
 benchmark_name: "SQLBench-OpenEnv"
 version: "1.0.0"
@@ -15,21 +14,9 @@ api_key_env: "OPENROUTER_API_KEY"
 base_url: "https://openrouter.ai/api/v1"
 
 models:
-  - id: "llama-3.3-70b"
-    name: "Llama 3.3 70B"
-    model_string: "meta-llama/llama-3.3-70b-instruct"
-    max_tokens: 512
-    temperature: 0.1
-
-  - id: "dolphin-mistral-24b"
-    name: "Dolphin Mistral 24B"
-    model_string: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
-    max_tokens: 512
-    temperature: 0.1
-
-  - id: "gemma-27b"
-    name: "Gemma 27B"
-    model_string: "google/gemma-2-27b-it"
+  - id: "ling-2-6-1t-free"
+    name: "Ling-2.6-1T (Free)"
+    model_string: "inclusionai/ling-2.6-1t:free"
     max_tokens: 512
     temperature: 0.1
 
@@ -48,7 +35,7 @@ benchmark_tasks:
 
 # Evaluation settings
 settings:
-  max_steps_per_episode: 5     # Keep fast â€” 3 models Ã— 5 tasks Ã— 5 steps = 75 API calls max
+  max_steps_per_episode: 5     # Keep fast — 1 model × 5 tasks × 5 steps = 25 API calls max
   runs_per_task: 1             # For reproducibility; increase to 3 for variance analysis
   seed: 42
   timeout_seconds: 300         # Per-task wall-clock timeout
