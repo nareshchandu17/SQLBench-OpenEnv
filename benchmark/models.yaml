@@ -1,6 +1,6 @@
 # benchmark/models.yaml
 # Models evaluated in the SQLBench-OpenEnv benchmark.
-# All accessed via OpenAI-compatible client.
+# Single API gateway pattern - all models use shared authentication.
 # Add / remove models freely — the runner iterates this list.
 
 benchmark_name: "SQLBench-OpenEnv"
@@ -9,28 +9,27 @@ description: >
   Evaluation of LLM capability on SQL correction and optimization tasks.
   Covers syntax repair, join logic, aggregation correctness, and query efficiency.
 
+# Global provider configuration (gateway pattern)
+provider: "openrouter"
+api_key_env: "OPENROUTER_API_KEY"
+base_url: "https://openrouter.ai/api/v1"
+
 models:
   - id: "llama-3.3-70b"
     name: "Llama 3.3 70B"
     model_string: "meta-llama/llama-3.3-70b-instruct"
-    provider: "openrouter"
-    api_key_env: "LLAMA_API_KEY"
     max_tokens: 512
     temperature: 0.1
 
   - id: "dolphin-mistral-24b"
     name: "Dolphin Mistral 24B"
     model_string: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
-    provider: "openrouter"
-    api_key_env: "DOLPHIN_API_KEY"
     max_tokens: 512
     temperature: 0.1
 
   - id: "gemma-27b"
     name: "Gemma 27B"
     model_string: "google/gemma-2-27b-it"
-    provider: "openrouter"
-    api_key_env: "GEMMA_API_KEY"
     max_tokens: 512
     temperature: 0.1
 
@@ -45,7 +44,7 @@ benchmark_tasks:
     - fix_aggregate_logic
   hard:
     - multi_constraint_query
-    - fix_nested_subquery_logic
+    - ecommerce_supply_chain
 
 # Evaluation settings
 settings:
