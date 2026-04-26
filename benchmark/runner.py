@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field, asdict
 from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+import yaml
+import requests
 
 # Note: We don't load .env here to prioritize environment variables over .env file
 
