@@ -35,7 +35,7 @@ benchmark_tasks:
 
 # Evaluation settings
 settings:
-  max_steps_per_episode: 5     # Keep fast — 1 model × 5 tasks × 5 steps = 25 API calls max
+  max_steps_per_episode: 5     # Keep fast â€” 1 model Ã— 5 tasks Ã— 5 steps = 25 API calls max
   runs_per_task: 1             # For reproducibility; increase to 3 for variance analysis
   seed: 42
   timeout_seconds: 300         # Per-task wall-clock timeout
