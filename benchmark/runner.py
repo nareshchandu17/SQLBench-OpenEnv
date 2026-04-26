@@ -187,7 +187,7 @@ class BenchmarkRunner:
         
         # Load global API key (gateway pattern)
         api_key_env = self.config.get("api_key_env", "OPENROUTER_API_KEY")
-        self.default_api_key = api_key or os.environ.get(api_key_env)
+        self.default_api_key = api_key or os.environ.get(api_key_env, "").strip()
         
         if not self.default_api_key:
             raise ValueError(f"Missing required environment variable: {api_key_env}")

@@ -31,7 +31,7 @@ from sql_query_env.models import SQLAction
 # --- Configuration: ROBUST PROXY ALIGNMENT ---
 # Using .get() to prevent crash in validator environments where some keys might be missing
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api-inference.huggingface.co/v1")
-API_KEY      = os.environ.get("API_KEY", os.environ.get("HF_TOKEN", ""))
+API_KEY      = os.environ.get("API_KEY", os.environ.get("HF_TOKEN", "")).strip()
 MODEL_NAME   = os.environ.get("MODEL_NAME", os.environ.get("MODEL", "meta-llama/llama-3.1-8b-instruct"))
 
 BENCHMARK_MODE = os.getenv("BENCHMARK_MODE", "0") == "1"

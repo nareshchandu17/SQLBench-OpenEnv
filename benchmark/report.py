@@ -242,6 +242,27 @@ def save_report(report_content: str) -> None:
         print(f"Warning: Could not save report: {e}")
 
 
+def generate_reports(results: List[Any], output_dir: str) -> None:
+    """Generate all benchmark reports from results."""
+    from benchmark.leaderboard import generate_leaderboard
+    from benchmark.leaderboard import save_leaderboard
+    from benchmark.leaderboard import generate_error_taxonomy
+    
+    # Generate leaderboard
+    leaderboard = generate_leaderboard(results, output_dir)
+    save_leaderboard(leaderboard, output_dir)
+    
+    # Generate error taxonomy
+    taxonomy = generate_error_taxonomy(results, output_dir)
+    
+    # Generate model analysis report
+    if taxonomy:
+        report_content = generate_comparative_analysis(taxonomy)
+        save_report(report_content)
+    else:
+        print("Warning: Could not generate model analysis report")
+
+
 def main():
     """Generate and display model analysis report."""
     taxonomy = load_taxonomy()

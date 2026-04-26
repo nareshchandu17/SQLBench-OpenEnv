@@ -1,6 +1,6 @@
 {
   "benchmark": "SQLBench-OpenEnv",
-  "timestamp": "2026-04-26T05:02:34.255708+00:00",
+  "timestamp": "2026-04-26T05:46:28.274429+00:00",
   "description": "Rate of each error category per model. Rates sum to 1.0 across all categories including success.",
   "categories": [
     "syntax_error",

@@ -6,7 +6,7 @@ This report analyzes SQL query error patterns to help model developers
 understand strengths, weaknesses, and areas for improvement.
 
 Benchmark: SQLBench-OpenEnv
-Timestamp: 2026-04-26T05:02:34.255708+00:00
+Timestamp: 2026-04-26T05:46:28.274429+00:00
 
 
 ======================================================================
