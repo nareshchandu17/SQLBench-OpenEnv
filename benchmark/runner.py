@@ -21,12 +21,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field, asdict
 from concurrent.futures import ThreadPoolExecutor
 
-from dotenv import load_dotenv
-import yaml
-import requests
-
-# Load environment variables from .env file
-load_dotenv()
+# Note: We don't load .env here to prioritize environment variables over .env file
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from sql_query_env.environment import SQLQueryEnv
@@ -186,8 +181,15 @@ class BenchmarkRunner:
         self.api_base_url = api_base_url or self.config.get("base_url", "https://openrouter.ai/api/v1")
         
         # Load global API key (gateway pattern)
+        # Priority: 1. Direct parameter, 2. Environment variable, 3. .env file
         api_key_env = self.config.get("api_key_env", "OPENROUTER_API_KEY")
         self.default_api_key = api_key or os.environ.get(api_key_env, "").strip()
+        
+        # If still empty, try loading from .env as fallback
+        if not self.default_api_key:
+            from dotenv import load_dotenv
+            load_dotenv()
+            self.default_api_key = os.environ.get(api_key_env, "").strip()
         
         if not self.default_api_key:
             raise ValueError(f"Missing required environment variable: {api_key_env}")
