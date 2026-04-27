@@ -26,24 +26,25 @@ and optimization tasks.
 Run the full benchmark locally:
 
 ```bash
-git clone https://huggingface.co/spaces/YOUR_HF_USERNAME/sql-query-env
-cd sql-query-env
+git clone https://github.com/nareshchandu17/SQLBench-OpenEnv
+cd SQLBench-OpenEnv
 pip install -r requirements.txt
+# Set your OPENROUTER_API_KEY in .env file
 python run_benchmark.py
 ```
 
-Example output:
+Example output (using free model):
 ```
 SQLBench-OpenEnv Benchmark
 
-Models evaluated: 3
+Models evaluated: 1
 Tasks per model: 6
 
 Leaderboard
-1. Llama 3.3 70B   Avg: 0.208
-2. Gemma 27B       Avg: 0.208
-3. Dolphin 24B     Avg: 0.023
+1. Ling-2.6-1T (Free)   Avg: 0.683  Solved: 4/6
 ```
+
+**✅ Current Status**: Working with OpenRouter API using free models!
 
 ---
 
