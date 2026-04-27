@@ -437,16 +437,29 @@ class BenchmarkRunner:
                                 print(f"      ⚠ API error: {err}")
 
                         except Exception as e:
-                            print(f" ERROR: {e}")
+                            error_msg = str(e)
+                            print(f" ERROR: {error_msg}")
+                            
+                            # Categorize error type for better debugging
+                            if "401" in error_msg or "402" in error_msg:
+                                error_category = "api_error"
+                            elif "timeout" in error_msg.lower():
+                                error_category = "timeout_error"
+                            elif "rate" in error_msg.lower():
+                                error_category = "rate_limit_error"
+                            else:
+                                error_category = "runtime_error"
+                            
                             model_result.task_results.append(TaskResult(
                                 task_id=task_id,
                                 difficulty=difficulty,
                                 episode_score=0.0,
                                 steps_taken=0,
                                 solved=False,
-                                error_category="syntax_error",
+                                error_category=error_category,
                                 total_reward=0.0,
                                 duration_seconds=0.0,
+                                api_errors=[error_msg],
                             ))
             else:
                 # Sequential execution (rate limit safe)
