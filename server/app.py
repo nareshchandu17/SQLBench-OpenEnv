@@ -409,6 +409,104 @@ def run_benchmark_background(job_id: str):
         traceback.print_exc()
 
 
+# ── Intelligent Visualization Helpers ───────────────────────────────────────
+
+def generate_model_visualization(rankings: list) -> str:
+    """Generate smart visualization based on data density."""
+    model_count = len(rankings)
+    
+    if model_count == 0:
+        return '<div class="empty-state"><div class="empty-state-title">No Data</div></div>'
+    
+    # Single model: Show progress bars for each difficulty
+    if model_count == 1:
+        entry = rankings[0]
+        model_name = entry.get('model_name', 'Unknown')
+        easy = max(0.0, min(1.0, entry.get('easy', 0.0)))
+        medium = max(0.0, min(1.0, entry.get('medium', 0.0)))
+        hard = max(0.0, min(1.0, entry.get('hard', 0.0)))
+        avg = max(0.0, min(1.0, entry.get('average_score', entry.get('average', 0.0))))
+        
+        def get_score_class(score):
+            if score >= 0.7: return 'high'
+            elif score >= 0.4: return 'medium'
+            return 'low'
+        
+        return f'''
+        <div class="progress-visualization">
+            <div style="margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--text-secondary);">
+                {model_name}
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">Easy</span>
+                <div class="progress-track">
+                    <div class="progress-fill {get_score_class(easy)}" style="width: {easy*100}%"></div>
+                </div>
+                <span class="progress-value">{easy:.2f}</span>
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">Medium</span>
+                <div class="progress-track">
+                    <div class="progress-fill {get_score_class(medium)}" style="width: {medium*100}%"></div>
+                </div>
+                <span class="progress-value">{medium:.2f}</span>
+            </div>
+            <div class="progress-item">
+                <span class="progress-label">Hard</span>
+                <div class="progress-track">
+                    <div class="progress-fill {get_score_class(hard)}" style="width: {hard*100}%"></div>
+                </div>
+                <span class="progress-value">{hard:.2f}</span>
+            </div>
+            <div class="progress-item" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-glass);">
+                <span class="progress-label" style="font-weight: 700;">Average</span>
+                <div class="progress-track">
+                    <div class="progress-fill {get_score_class(avg)}" style="width: {avg*100}%"></div>
+                </div>
+                <span class="progress-value" style="font-weight: 700;">{avg:.3f}</span>
+            </div>
+        </div>
+        '''
+    
+    # Multiple models: Show chart
+    return '<div class="chart-container"><canvas id="modelChart"></canvas></div>'
+
+
+def generate_difficulty_visualization(easy: float, medium: float, hard: float) -> str:
+    """Generate difficulty visualization with progress bars - works for any data state."""
+    
+    def get_score_class(score):
+        if score >= 0.7: return 'high'
+        elif score >= 0.4: return 'medium'
+        return 'low'
+    
+    return f'''
+    <div class="progress-visualization">
+        <div class="progress-item">
+            <span class="progress-label" style="color: var(--success);">Easy</span>
+            <div class="progress-track">
+                <div class="progress-fill {get_score_class(easy)}" style="width: {easy*100}%"></div>
+            </div>
+            <span class="progress-value">{easy:.2f}</span>
+        </div>
+        <div class="progress-item">
+            <span class="progress-label" style="color: var(--warning);">Medium</span>
+            <div class="progress-track">
+                <div class="progress-fill {get_score_class(medium)}" style="width: {medium*100}%"></div>
+            </div>
+            <span class="progress-value">{medium:.2f}</span>
+        </div>
+        <div class="progress-item">
+            <span class="progress-label" style="color: var(--error);">Hard</span>
+            <div class="progress-track">
+                <div class="progress-fill {get_score_class(hard)}" style="width: {hard*100}%"></div>
+            </div>
+            <span class="progress-value">{hard:.2f}</span>
+        </div>
+    </div>
+    '''
+
+
 # ── HTML Template Generation ───────────────────────────────────────────────
 
 def generate_dashboard_html(
@@ -1374,11 +1472,127 @@ def generate_dashboard_html(
             background: var(--error);
         }}
 
-        /* Charts */
+        /* Charts - Reduced height for denser layout */
         .chart-container {{
             position: relative;
-            height: 280px;
+            height: 200px;
             margin-top: 16px;
+        }}
+
+        /* Progress Bars for Low-Data Visualization */
+        .progress-visualization {{
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 16px 0;
+        }}
+
+        .progress-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .progress-label {{
+            min-width: 80px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }}
+
+        .progress-track {{
+            flex: 1;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 100px;
+            overflow: hidden;
+            position: relative;
+        }}
+
+        .progress-fill {{
+            height: 100%;
+            border-radius: 100px;
+            transition: width 1s ease;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .progress-fill::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }}
+
+        @keyframes shimmer {{
+            0% {{ transform: translateX(-100%); }}
+            100% {{ transform: translateX(100%); }}
+        }}
+
+        .progress-fill.high {{
+            background: linear-gradient(90deg, var(--success), #34d399);
+        }}
+
+        .progress-fill.medium {{
+            background: linear-gradient(90deg, var(--warning), #fbbf24);
+        }}
+
+        .progress-fill.low {{
+            background: linear-gradient(90deg, var(--error), #f87171);
+        }}
+
+        .progress-value {{
+            min-width: 50px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }}
+
+        /* KPI Cards for Low Data States */
+        .kpi-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            padding: 16px 0;
+        }}
+
+        .kpi-mini {{
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }}
+
+        .kpi-mini:hover {{
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(139, 92, 246, 0.2);
+        }}
+
+        .kpi-mini-value {{
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, #fafafa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+
+        .kpi-mini-label {{
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }}
 
         /* Insights Panel */
@@ -1759,20 +1973,23 @@ def generate_dashboard_html(
                     </table>
                 </div>
 
-                <!-- Charts Grid -->
+                <!-- Charts Grid with Intelligent Switching -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;">
+                    <!-- Model Performance - Smart Visualization -->
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Model Performance</div>
+                            <span style="font-size: 11px; color: var(--text-muted);">{len(rankings)} model{'s' if len(rankings) != 1 else ''}</span>
                         </div>
-                        {'<div class="chart-container"><canvas id="modelChart"></canvas></div>' if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see performance metrics</div></div>'}
+                        {generate_model_visualization(rankings) if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see performance metrics</div></div>'}
                     </div>
 
+                    <!-- Difficulty Analysis - Smart Visualization -->
                     <div class="card">
                         <div class="card-header">
                             <div class="card-title">Difficulty Analysis</div>
                         </div>
-                        {'<div class="chart-container"><canvas id="difficultyChart"></canvas></div>' if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see difficulty breakdown</div></div>'}
+                        {generate_difficulty_visualization(difficulty_easy, difficulty_medium, difficulty_hard) if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see difficulty breakdown</div></div>'}
                     </div>
                 </div>
             </div>
