@@ -8,7 +8,7 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from database import SessionLocal
-from benchmark.models import BenchmarkResult, ModelPerformance
+from benchmark.models import BenchmarkRun, ModelPerformance
 
 
 def generate_seed_data():
@@ -69,20 +69,22 @@ def generate_seed_data():
                 performance = ModelPerformance(
                     run_id=run_id,
                     model_name=model,
-                    timestamp=run_date,
-                    easy_score=easy_score,
-                    medium_score=medium_score,
-                    hard_score=hard_score,
+                    model_id=model.lower().replace("-", "_"),
                     average_score=avg_score,
                     tasks_solved=random.randint(3, 6),
                     total_tasks=6,
-                    avg_execution_time=random.uniform(2.0, 8.0),
-                    error_count=random.randint(0, 3),
-                    error_breakdown=json.dumps({
+                    solve_rate=avg_score,
+                    avg_duration=random.uniform(2.0, 8.0),
+                    total_duration=random.uniform(15.0, 45.0),
+                    easy_avg=easy_score,
+                    medium_avg=medium_score,
+                    hard_avg=hard_score,
+                    error_categories=json.dumps({
                         "syntax_errors": random.randint(0, 2),
                         "logic_errors": random.randint(0, 2),
                         "timeout_errors": random.randint(0, 1)
-                    })
+                    }),
+                    created_at=run_date
                 )
                 db.add(performance)
                 
@@ -104,20 +106,22 @@ def generate_seed_data():
                     task_score = min(1.0, max(0.0, base_task_score + task_variance))
                     solved = task_score > 0.6
                     
-                    result = BenchmarkResult(
+                    run_entry = BenchmarkRun(
                         run_id=run_id,
                         model_name=model,
+                        model_id=model.lower().replace("-", "_"),
                         task_id=task,
                         task_difficulty=difficulty,
+                        episode_score=task_score,
+                        total_reward=task_score * 10,
+                        steps_taken=random.randint(1, 5),
                         solved=solved,
-                        score=task_score,
-                        execution_time=random.uniform(1.5, 10.0),
-                        token_usage=random.randint(500, 3000),
-                        error_type=None if solved else random.choice(["syntax", "logic", "timeout"]),
-                        error_message=None if solved else "Sample error for demo",
-                        timestamp=run_date
+                        duration_seconds=random.uniform(1.5, 10.0),
+                        error_category=None if solved else random.choice(["syntax", "logic", "timeout"]),
+                        status="completed" if solved else "failed",
+                        created_at=run_date
                     )
-                    db.add(result)
+                    db.add(run_entry)
             
             print(f"  ✓ Generated run {run_idx + 1}/10: {run_id}")
         
@@ -139,7 +143,7 @@ def check_existing_data():
     """Check if there's already benchmark data in the database."""
     db = SessionLocal()
     try:
-        count = db.query(BenchmarkResult).count()
+        count = db.query(BenchmarkRun).count()
         return count > 0
     finally:
         db.close()
