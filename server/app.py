@@ -451,39 +451,115 @@ def generate_dashboard_html(
     has_leaderboard = bool(rankings)
     has_errors = bool(error_data)
 
-    # Build table rows with safe dictionary access and fallbacks
+    # Build premium table rows with badges, avatars, and score bars
     table_rows = ""
     if has_leaderboard:
         for i, entry in enumerate(rankings, 1):
             model_name = escape_html(entry.get('model_name', 'Unknown'))
+            model_id = entry.get('model_id', 'unknown')
             easy = max(0.0, min(1.0, entry.get('easy', 0.0)))
             medium = max(0.0, min(1.0, entry.get('medium', 0.0)))
             hard = max(0.0, min(1.0, entry.get('hard', 0.0)))
             avg = max(0.0, min(1.0, entry.get('average_score', entry.get('average', 0.0))))
             
+            # Rank badge class
+            if i == 1:
+                rank_class = "gold"
+                rank_icon = "🥇"
+            elif i == 2:
+                rank_class = "silver"
+                rank_icon = "🥈"
+            elif i == 3:
+                rank_class = "bronze"
+                rank_icon = "🥉"
+            else:
+                rank_class = "other"
+                rank_icon = str(i)
+            
+            # Score badge classes
+            def get_score_class(score):
+                if score >= 0.7:
+                    return "high"
+                elif score >= 0.4:
+                    return "medium"
+                return "low"
+            
+            # Model initials for avatar
+            initials = ''.join(word[0].upper() for word in model_name.split()[:2] if word)
+            if not initials:
+                initials = model_id[:2].upper() if model_id else "M"
+            
+            # Tasks solved info
+            tasks_solved_count = sum(1 for tr in entry.get('task_results', []) if tr.get('solved', False))
+            total_model_tasks = len(entry.get('task_results', []))
+            
             table_rows += f"""
             <tr>
-                <td class="rank">{i}</td>
-                <td class="model-name">{model_name}</td>
-                <td><span class="score">{easy:.3f}</span></td>
-                <td><span class="score">{medium:.3f}</span></td>
-                <td><span class="score">{hard:.3f}</span></td>
-                <td><span class="score high">{avg:.3f}</span></td>
+                <td>
+                    <div class="rank-badge {rank_class}">{rank_icon}</div>
+                </td>
+                <td>
+                    <div class="model-info">
+                        <div class="model-avatar">{initials}</div>
+                        <div>
+                            <div class="model-name">{model_name}</div>
+                            <div class="model-meta">{tasks_solved_count}/{total_model_tasks} tasks solved</div>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="score-badge {get_score_class(easy)}">{easy:.2f}</span>
+                    <div class="score-bar"><div class="score-bar-fill {get_score_class(easy)}" style="width: {easy*100}%"></div></div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="score-badge {get_score_class(medium)}">{medium:.2f}</span>
+                    <div class="score-bar"><div class="score-bar-fill {get_score_class(medium)}" style="width: {medium*100}%"></div></div>
+                </td>
+                <td style="text-align: center;">
+                    <span class="score-badge {get_score_class(hard)}">{hard:.2f}</span>
+                    <div class="score-bar"><div class="score-bar-fill {get_score_class(hard)}" style="width: {hard*100}%"></div></div>
+                </td>
+                <td style="text-align: right;">
+                    <span class="score-badge {get_score_class(avg)}">{avg:.3f}</span>
+                    <div class="score-bar"><div class="score-bar-fill {get_score_class(avg)}" style="width: {avg*100}%"></div></div>
+                </td>
             </tr>"""
     else:
         table_rows = """
             <tr>
-                <td colspan="6" class="no-data">
-                    No benchmark results yet. Run: <code>python run_benchmark.py</code>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <div class="empty-state-title">No Benchmark Data</div>
+                        <div class="empty-state-desc">Run a benchmark to see model performance rankings</div>
+                    </div>
                 </td>
             </tr>"""
 
-    # Build chart initialization scripts
+    # Build premium chart initialization scripts with dark theme
+    chart_colors = {
+        'primary': 'rgba(139, 92, 246, 1)',
+        'primary_alpha': 'rgba(139, 92, 246, 0.7)',
+        'secondary': 'rgba(236, 72, 153, 1)',
+        'secondary_alpha': 'rgba(236, 72, 153, 0.7)',
+        'accent': 'rgba(6, 182, 212, 1)',
+        'accent_alpha': 'rgba(6, 182, 212, 0.7)',
+        'success': 'rgba(16, 185, 129, 0.7)',
+        'warning': 'rgba(245, 158, 11, 0.7)',
+        'error': 'rgba(239, 68, 68, 0.7)',
+        'grid': 'rgba(255, 255, 255, 0.05)',
+        'text': '#a1a1aa'
+    }
+    
     model_chart_init = ""
     if has_leaderboard:
         model_chart_init = f"""
         const modelCtx = document.getElementById('modelChart')?.getContext('2d');
         if (modelCtx) {{
+            // Create gradient
+            const gradient = modelCtx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(139, 92, 246, 0.8)');
+            gradient.addColorStop(1, 'rgba(236, 72, 153, 0.4)');
+            
             new Chart(modelCtx, {{
                 type: 'bar',
                 data: {{
@@ -491,10 +567,11 @@ def generate_dashboard_html(
                     datasets: [{{
                         label: 'Average Score',
                         data: {model_scores},
-                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        borderWidth: 2,
-                        borderRadius: 6,
+                        backgroundColor: gradient,
+                        borderColor: 'rgba(139, 92, 246, 0.8)',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        borderSkipped: false,
                     }}]
                 }},
                 options: {{
@@ -505,12 +582,32 @@ def generate_dashboard_html(
                         x: {{
                             beginAtZero: true,
                             max: 1.0,
-                            ticks: {{ callback: (val) => val.toFixed(2) }}
+                            grid: {{ color: '{chart_colors['grid']}' }},
+                            ticks: {{ 
+                                color: '{chart_colors['text']}',
+                                callback: (val) => val.toFixed(2),
+                                font: {{ family: 'JetBrains Mono' }}
+                            }}
+                        }},
+                        y: {{
+                            grid: {{ display: false }},
+                            ticks: {{ 
+                                color: '{chart_colors['text']}',
+                                font: {{ family: 'Inter', size: 12 }}
+                            }}
                         }}
                     }},
                     plugins: {{
                         legend: {{ display: false }},
-                        tooltip: {{ callbacks: {{ label: (ctx) => ctx.raw.toFixed(3) }} }}
+                        tooltip: {{
+                            backgroundColor: 'rgba(18, 18, 26, 0.95)',
+                            titleColor: '#fafafa',
+                            bodyColor: '#a1a1aa',
+                            borderColor: 'rgba(139, 92, 246, 0.3)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {{ label: (ctx) => 'Score: ' + ctx.raw.toFixed(3) }}
+                        }}
                     }}
                 }}
             }});
@@ -529,27 +626,42 @@ def generate_dashboard_html(
                     datasets: [{{
                         data: [{difficulty_easy:.2f}, {difficulty_medium:.2f}, {difficulty_hard:.2f}],
                         backgroundColor: [
-                            'rgba(76, 175, 80, 0.7)',
-                            'rgba(255, 193, 7, 0.7)',
-                            'rgba(244, 67, 54, 0.7)'
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
                         ],
                         borderColor: [
-                            'rgba(76, 175, 80, 1)',
-                            'rgba(255, 193, 7, 1)',
-                            'rgba(244, 67, 54, 1)'
+                            'rgba(16, 185, 129, 1)',
+                            'rgba(245, 158, 11, 1)',
+                            'rgba(239, 68, 68, 1)'
                         ],
-                        borderWidth: 2
+                        borderWidth: 2,
+                        hoverOffset: 8
                     }}]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '65%',
                     plugins: {{
                         legend: {{
                             position: 'bottom',
-                            labels: {{ padding: 15, font: {{ size: 12 }} }}
+                            labels: {{ 
+                                padding: 20, 
+                                font: {{ size: 12, family: 'Inter', color: '{chart_colors['text']}' }},
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }}
                         }},
-                        tooltip: {{ callbacks: {{ label: (ctx) => ctx.raw.toFixed(2) }} }}
+                        tooltip: {{
+                            backgroundColor: 'rgba(18, 18, 26, 0.95)',
+                            titleColor: '#fafafa',
+                            bodyColor: '#a1a1aa',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {{ label: (ctx) => ctx.label + ': ' + ctx.raw.toFixed(2) }}
+                        }}
                     }}
                 }}
             }});
@@ -568,22 +680,23 @@ def generate_dashboard_html(
                     datasets: [{{
                         data: {error_percentages},
                         backgroundColor: [
-                            'rgba(255, 107, 107, 0.7)',
-                            'rgba(255, 159, 64, 0.7)',
-                            'rgba(255, 206, 86, 0.7)',
-                            'rgba(75, 192, 192, 0.7)',
-                            'rgba(54, 162, 235, 0.7)',
-                            'rgba(153, 102, 255, 0.7)',
+                            'rgba(239, 68, 68, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(251, 191, 36, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
                         ],
                         borderColor: [
-                            'rgba(255, 107, 107, 1)',
-                            'rgba(255, 159, 64, 1)',
-                            'rgba(255, 206, 86, 1)',
-                            'rgba(75, 192, 192, 1)',
-                            'rgba(54, 162, 235, 1)',
-                            'rgba(153, 102, 255, 1)',
+                            'rgba(239, 68, 68, 1)',
+                            'rgba(245, 158, 11, 1)',
+                            'rgba(251, 191, 36, 1)',
+                            'rgba(16, 185, 129, 1)',
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(139, 92, 246, 1)',
                         ],
-                        borderWidth: 2
+                        borderWidth: 2,
+                        hoverOffset: 4
                     }}]
                 }},
                 options: {{
@@ -591,25 +704,75 @@ def generate_dashboard_html(
                     maintainAspectRatio: false,
                     plugins: {{
                         legend: {{
-                            position: 'bottom',
-                            labels: {{ padding: 15, font: {{ size: 11 }} }}
+                            position: 'right',
+                            labels: {{ 
+                                padding: 15, 
+                                font: {{ size: 11, family: 'Inter', color: '{chart_colors['text']}' }},
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }}
                         }},
-                        tooltip: {{ callbacks: {{ label: (ctx) => (ctx.parsed * 100).toFixed(1) + '%' }} }}
+                        tooltip: {{
+                            backgroundColor: 'rgba(18, 18, 26, 0.95)',
+                            titleColor: '#fafafa',
+                            bodyColor: '#a1a1aa',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {{ label: (ctx) => ctx.label + ': ' + ctx.parsed.toFixed(1) + '%' }}
+                        }}
                     }}
                 }}
             }});
         }}
         """
 
-    # Assemble HTML
+    # Calculate KPI metrics for premium cards
+    avg_score = sum(max(0.0, min(1.0, r.get('average_score', r.get('average', 0.0)))) for r in rankings) / len(rankings) if rankings else 0.0
+    tasks_solved = sum(sum(1 for tr in r.get('task_results', []) if tr.get('solved', False)) for r in (leaderboard.get('models', []) if leaderboard else []))
+    total_tasks = len(rankings) * 6 if rankings else 0
+    success_rate = (tasks_solved / total_tasks * 100) if total_tasks > 0 else 0.0
+    hard_accuracy = sum(max(0.0, min(1.0, r.get('hard', 0.0))) for r in rankings) / len(rankings) if rankings else 0.0
+    
+    # Assemble PREMIUM HTML
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{APP_TITLE} · Dashboard</title>
+    <title>{APP_TITLE} · AI Research Platform</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {{
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(18, 18, 26, 0.8);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --accent-primary: #8b5cf6;
+            --accent-secondary: #ec4899;
+            --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #06b6d4 100%);
+            --accent-glow: rgba(139, 92, 246, 0.4);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+        }}
+
         * {{
             margin: 0;
             padding: 0;
@@ -617,315 +780,1068 @@ def generate_dashboard_html(
         }}
 
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
             min-height: 100vh;
-            padding: 40px 20px;
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
         }}
 
+        /* Animated Background */
+        .bg-mesh {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }}
+
+        .bg-mesh::before {{
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(236, 72, 153, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
+            animation: meshMove 20s ease-in-out infinite;
+        }}
+
+        @keyframes meshMove {{
+            0%, 100% {{ transform: translate(0, 0) rotate(0deg); }}
+            33% {{ transform: translate(2%, 2%) rotate(120deg); }}
+            66% {{ transform: translate(-1%, 1%) rotate(240deg); }}
+        }}
+
+        /* Floating Particles */
+        .particles {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }}
+
+        .particle {{
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(139, 92, 246, 0.3);
+            border-radius: 50%;
+            animation: float 15s infinite;
+        }}
+
+        @keyframes float {{
+            0%, 100% {{ transform: translateY(0) translateX(0); opacity: 0; }}
+            10% {{ opacity: 1; }}
+            90% {{ opacity: 1; }}
+            100% {{ transform: translateY(-100vh) translateX(50px); opacity: 0; }}
+        }}
+
+        /* Layout */
         .container {{
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
+            padding: 24px;
         }}
 
-        header {{
-            background: white;
-            border-radius: 12px;
-            padding: 30px 40px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        /* Hero Section */
+        .hero {{
+            position: relative;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: 48px;
+            margin-bottom: 32px;
+            overflow: hidden;
         }}
 
-        h1 {{
-            color: #2d3748;
-            font-size: 2em;
-            margin-bottom: 10px;
+        .hero::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.5), rgba(236, 72, 153, 0.5), transparent);
         }}
 
-        .subtitle {{
-            color: #718096;
-            font-size: 1em;
+        .hero-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 100px;
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 24px;
         }}
 
-        .timestamp {{
-            color: #a0aec0;
-            font-size: 0.9em;
-            margin-top: 15px;
-            font-style: italic;
+        .hero-badge::before {{
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
         }}
 
-        .grid {{
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; transform: scale(1); }}
+            50% {{ opacity: 0.6; transform: scale(1.2); }}
+        }}
+
+        .hero h1 {{
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fafafa 0%, #a78bfa 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }}
+
+        .hero-subtitle {{
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+            max-width: 600px;
+            margin-bottom: 32px;
+        }}
+
+        .hero-meta {{
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }}
+
+        .hero-meta-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }}
+
+        .hero-meta-item svg {{
+            width: 16px;
+            height: 16px;
+            opacity: 0.6;
+        }}
+
+        .status-live {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--success);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .status-live::before {{
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }}
+
+        /* Premium CTA Button */
+        .cta-container {{
+            margin-top: 32px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }}
+
+        .btn-premium {{
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--accent-gradient);
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 16px 32px;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 24px rgba(139, 92, 246, 0.4);
+        }}
+
+        .btn-premium::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }}
+
+        .btn-premium:hover::before {{
+            left: 100%;
+        }}
+
+        .btn-premium:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.5);
+        }}
+
+        .btn-premium:disabled {{
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }}
+
+        .btn-icon {{
+            width: 20px;
+            height: 20px;
+        }}
+
+        .btn-premium.loading .btn-icon {{
+            animation: spin 1s linear infinite;
+        }}
+
+        @keyframes spin {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(360deg); }}
+        }}
+
+        /* Progress Bar Premium */
+        .progress-container {{
+            flex: 1;
+            min-width: 300px;
+            max-width: 500px;
+        }}
+
+        .progress-bar-bg {{
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 100px;
+            overflow: hidden;
+            position: relative;
+        }}
+
+        .progress-bar-fill {{
+            height: 100%;
+            background: var(--accent-gradient);
+            border-radius: 100px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .progress-bar-fill::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }}
+
+        @keyframes shimmer {{
+            0% {{ transform: translateX(-100%); }}
+            100% {{ transform: translateX(100%); }}
+        }}
+
+        .progress-text {{
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }}
+
+        /* KPI Cards */
+        .kpi-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
         }}
 
-        @media (max-width: 1024px) {{
-            .grid {{
+        .kpi-card {{
+            position: relative;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }}
+
+        .kpi-card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent-gradient);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }}
+
+        .kpi-card:hover {{
+            transform: translateY(-4px);
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: var(--shadow-glow);
+        }}
+
+        .kpi-card:hover::before {{
+            opacity: 1;
+        }}
+
+        .kpi-icon {{
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+            color: var(--accent-primary);
+        }}
+
+        .kpi-label {{
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }}
+
+        .kpi-value {{
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+        }}
+
+        .kpi-change {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            margin-top: 8px;
+            font-weight: 500;
+        }}
+
+        .kpi-change.positive {{
+            color: var(--success);
+        }}
+
+        .kpi-change.negative {{
+            color: var(--error);
+        }}
+
+        /* Section Headers */
+        .section-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }}
+
+        .section-title {{
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .section-title svg {{
+            width: 20px;
+            height: 20px;
+            color: var(--accent-primary);
+        }}
+
+        /* Main Grid */
+        .main-grid {{
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 32px;
+            margin-bottom: 32px;
+        }}
+
+        @media (max-width: 1200px) {{
+            .main-grid {{
                 grid-template-columns: 1fr;
             }}
         }}
 
+        /* Cards */
         .card {{
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: all 0.3s ease;
         }}
 
-        .card h2 {{
-            color: #2d3748;
-            font-size: 1.3em;
+        .card:hover {{
+            border-color: rgba(139, 92, 246, 0.2);
+        }}
+
+        .card-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-glass);
         }}
 
-        .leaderboard {{
-            grid-column: 1 / -1;
+        .card-title {{
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
         }}
 
-        table {{
+        /* Leaderboard Premium */
+        .leaderboard-table {{
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
+            border-collapse: separate;
+            border-spacing: 0;
         }}
 
-        th {{
-            background: #f7fafc;
-            color: #2d3748;
-            padding: 12px;
+        .leaderboard-table th {{
             text-align: left;
+            padding: 12px 16px;
+            color: var(--text-muted);
+            font-size: 11px;
             font-weight: 600;
-            border-bottom: 2px solid #e2e8f0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-glass);
         }}
 
-        td {{
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-            color: #4a5568;
+        .leaderboard-table td {{
+            padding: 16px;
+            border-bottom: 1px solid var(--border-glass);
+            transition: background 0.2s ease;
         }}
 
-        tr:last-child td {{
-            border-bottom: none;
+        .leaderboard-table tr:hover td {{
+            background: rgba(139, 92, 246, 0.05);
         }}
 
-        .rank {{
-            font-weight: 600;
-            color: #667eea;
-            width: 40px;
+        .rank-badge {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 14px;
+        }}
+
+        .rank-badge.gold {{
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #000;
+        }}
+
+        .rank-badge.silver {{
+            background: linear-gradient(135deg, #e5e7eb, #9ca3af);
+            color: #000;
+        }}
+
+        .rank-badge.bronze {{
+            background: linear-gradient(135deg, #fdba74, #ea580c);
+            color: #000;
+        }}
+
+        .rank-badge.other {{
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }}
+
+        .model-info {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .model-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: white;
         }}
 
         .model-name {{
-            font-weight: 500;
-            color: #2d3748;
-        }}
-
-        .score {{
-            background: #e6fffa;
-            color: #0c7792;
             font-weight: 600;
-            border-radius: 6px;
-            padding: 4px 8px;
-            display: inline-block;
-            min-width: 50px;
-            text-align: center;
+            color: var(--text-primary);
         }}
 
-        .score.high {{
-            background: #c6f6d5;
-            color: #22543d;
+        .model-meta {{
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }}
 
-        .score.medium {{
-            background: #fed7d7;
-            color: #742a2a;
+        .score-badge {{
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
         }}
 
-        .chart-wrapper {{
+        .score-badge.high {{
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }}
+
+        .score-badge.medium {{
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }}
+
+        .score-badge.low {{
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }}
+
+        /* Score Bar */
+        .score-bar {{
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            overflow: hidden;
+            margin-top: 8px;
+        }}
+
+        .score-bar-fill {{
+            height: 100%;
+            border-radius: 100px;
+            transition: width 0.6s ease;
+        }}
+
+        .score-bar-fill.high {{
+            background: var(--success);
+        }}
+
+        .score-bar-fill.medium {{
+            background: var(--warning);
+        }}
+
+        .score-bar-fill.low {{
+            background: var(--error);
+        }}
+
+        /* Charts */
+        .chart-container {{
             position: relative;
-            height: 350px;
+            height: 280px;
+            margin-top: 16px;
         }}
 
-        .no-data {{
-            color: #a0aec0;
-            font-style: italic;
+        /* Insights Panel */
+        .insights-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        .insight-item {{
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            transition: all 0.2s ease;
+        }}
+
+        .insight-item:hover {{
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(139, 92, 246, 0.2);
+        }}
+
+        .insight-icon {{
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }}
+
+        .insight-icon.success {{
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }}
+
+        .insight-icon.warning {{
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }}
+
+        .insight-icon.error {{
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+        }}
+
+        .insight-content {{
+            flex: 1;
+        }}
+
+        .insight-title {{
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }}
+
+        .insight-desc {{
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }}
+
+        /* Skeleton Loading */
+        .skeleton {{
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }}
+
+        @keyframes skeleton-loading {{
+            0% {{ background-position: 200% 0; }}
+            100% {{ background-position: -200% 0; }}
+        }}
+
+        .skeleton-text {{
+            height: 12px;
+            margin-bottom: 8px;
+        }}
+
+        .skeleton-text:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .skeleton-title {{
+            height: 20px;
+            width: 60%;
+            margin-bottom: 16px;
+        }}
+
+        /* Toast Notifications */
+        .toast-container {{
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        .toast {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            animation: toastIn 0.3s ease;
+            max-width: 400px;
+        }}
+
+        @keyframes toastIn {{
+            from {{ transform: translateX(100%); opacity: 0; }}
+            to {{ transform: translateX(0); opacity: 1; }}
+        }}
+
+        .toast-icon {{
+            width: 20px;
+            height: 20px;
+        }}
+
+        .toast-content {{
+            flex: 1;
+        }}
+
+        .toast-title {{
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+        }}
+
+        .toast-message {{
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }}
+
+        /* Empty States */
+        .empty-state {{
             text-align: center;
-            padding: 40px 20px;
+            padding: 48px 24px;
+            color: var(--text-muted);
         }}
 
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+        .empty-state-icon {{
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            opacity: 0.3;
         }}
 
-        .stat {{
-            background: #f7fafc;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 6px;
+        .empty-state-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
         }}
 
-        .stat-label {{
-            color: #718096;
-            font-size: 0.85em;
-            margin-bottom: 5px;
+        .empty-state-desc {{
+            font-size: 14px;
+            color: var(--text-muted);
         }}
 
-        .stat-value {{
-            color: #2d3748;
-            font-size: 1.5em;
-            font-weight: 700;
-        }}
-
+        /* Footer */
         footer {{
             text-align: center;
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 0.9em;
-            margin-top: 40px;
+            padding: 32px 24px;
+            border-top: 1px solid var(--border-glass);
+            margin-top: 48px;
         }}
 
-        .api-link {{
-            color: rgba(255, 255, 255, 0.9);
+        .footer-links {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }}
+
+        .footer-link {{
+            color: var(--text-muted);
             text-decoration: none;
-            margin: 0 10px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: color 0.2s ease;
         }}
 
-        .api-link:hover {{
-            text-decoration: underline;
+        .footer-link:hover {{
+            color: var(--accent-primary);
         }}
 
-        code {{
-            background: #f5f5f5;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: monospace;
+        .footer-divider {{
+            color: var(--border-glass);
+        }}
+
+        /* Responsive */
+        @media (max-width: 768px) {{
+            .hero {{
+                padding: 32px 24px;
+            }}
+
+            .hero h1 {{
+                font-size: 2rem;
+            }}
+
+            .hero-meta {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }}
+
+            .cta-container {{
+                flex-direction: column;
+                align-items: stretch;
+            }}
+
+            .progress-container {{
+                max-width: none;
+            }}
+
+            .kpi-grid {{
+                grid-template-columns: repeat(2, 1fr);
+            }}
+
+            .leaderboard-table {{
+                font-size: 13px;
+            }}
+
+            .leaderboard-table th,
+            .leaderboard-table td {{
+                padding: 12px 8px;
+            }}
+
+            .model-avatar {{
+                display: none;
+            }}
+        }}
+
+        @media (max-width: 480px) {{
+            .kpi-grid {{
+                grid-template-columns: 1fr;
+            }}
+
+            .container {{
+                padding: 16px;
+            }}
         }}
     </style>
 </head>
 <body>
+    <!-- Animated Background -->
+    <div class="bg-mesh"></div>
+    <div class="particles" id="particles"></div>
+
     <div class="container">
-        <header>
-            <h1>🎯 {APP_TITLE}</h1>
-            <p class="subtitle">Interactive benchmark dashboard for LLM evaluation on SQL debugging tasks</p>
-            <div class="timestamp">Last updated: {format_timestamp(timestamp)}</div>
-            
-            <!-- Run Benchmark Button -->
-            <div style="margin-top: 20px;">
-                <button id="runBenchmarkBtn" onclick="runBenchmark()" 
-                        style="background: #667eea; color: white; border: none; padding: 12px 24px; 
-                               border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;
-                               transition: all 0.3s ease;">
-                    🚀 Run Benchmark
+        <!-- Premium Hero Section -->
+        <div class="hero">
+            <div class="hero-badge">
+                <span>AI Research Platform</span>
+            </div>
+            <h1>{APP_TITLE}</h1>
+            <p class="hero-subtitle">Professional benchmark environment for evaluating LLM capability on SQL debugging, correction, and optimization tasks</p>
+            <div class="hero-meta">
+                <div class="hero-meta-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Last updated: {format_timestamp(timestamp)}</span>
+                </div>
+                <div class="status-live">● Live System</div>
+            </div>
+
+            <!-- Premium CTA -->
+            <div class="cta-container">
+                <button id="runBenchmarkBtn" class="btn-premium" onclick="runBenchmark()">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span>Run Benchmark</span>
                 </button>
-                <div id="benchmarkStatus" style="margin-top: 15px; color: #718096; font-size: 14px;"></div>
-                <div id="benchmarkProgress" style="margin-top: 10px;">
-                    <div id="progressBar" style="display: none; width: 100%; height: 20px; background: #e2e8f0; border-radius: 10px; overflow: hidden;">
-                        <div id="progressFill" style="height: 100%; background: #667eea; width: 0%; transition: width 0.3s ease;"></div>
+                
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="progressFill" style="width: 0%;"></div>
                     </div>
-                    <div id="progressText" style="margin-top: 5px; font-size: 12px; color: #718096;"></div>
-                </div>
-            </div>
-        </header>
-
-        <!-- Leaderboard Section -->
-        <div class="card leaderboard">
-            <h2>📊 Leaderboard</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th class="rank">#</th>
-                        <th class="model-name">Model</th>
-                        <th>Easy</th>
-                        <th>Medium</th>
-                        <th>Hard</th>
-                        <th>Average</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {table_rows}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Charts Grid -->
-        <div class="grid">
-            <!-- Model Scores Chart -->
-            <div class="card">
-                <h2>📈 Average Scores by Model</h2>
-                {'<div class="chart-wrapper"><canvas id="modelChart"></canvas></div>' if has_leaderboard else '<div class="no-data">Waiting for benchmark results</div>'}
-            </div>
-
-            <!-- Difficulty Breakdown -->
-            <div class="card">
-                <h2>🎚️ Difficulty Breakdown (All Models)</h2>
-                {f'<div class="stats"><div class="stat"><div class="stat-label">Easy</div><div class="stat-value">{difficulty_easy:.2f}</div></div><div class="stat"><div class="stat-label">Medium</div><div class="stat-value">{difficulty_medium:.2f}</div></div><div class="stat"><div class="stat-label">Hard</div><div class="stat-value">{difficulty_hard:.2f}</div></div></div><div class="chart-wrapper"><canvas id="difficultyChart"></canvas></div>' if has_leaderboard else '<div class="no-data">Waiting for benchmark results</div>'}
-            </div>
-
-            <!-- Error Taxonomy -->
-            <div class="card">
-                <h2>🐛 Error Taxonomy</h2>
-                {'<div class="chart-wrapper"><canvas id="errorChart"></canvas></div>' if has_errors else '<div class="no-data">No error taxonomy data available</div>'}
-            </div>
-
-            <!-- Analytics Section -->
-            <div class="card">
-                <h2>📊 Model Performance Analytics</h2>
-                <div class="analytics-container">
-                    <div class="analytics-controls">
-                        <button id="loadAnalyticsBtn" onclick="loadAnalytics()" 
-                                style="background: #667eea; color: white; border: none; padding: 8px 16px; 
-                                       border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">
-                            📈 Load Analytics
-                        </button>
-                        <div id="analyticsStatus" style="margin-left: 15px; color: #718096; font-size: 12px;"></div>
-                    </div>
-                    
-                    <!-- Analytics Chart -->
-                    <div id="analyticsChartContainer" style="margin-top: 20px; display: none;">
-                        <div class="chart-wrapper">
-                            <canvas id="analyticsChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <!-- Insights Panel -->
-                    <div id="insightsPanel" style="margin-top: 20px; display: none;">
-                        <h3 style="color: #2d3748; font-size: 1.1em; margin-bottom: 10px;">🧠 AI-Generated Insights</h3>
-                        <div id="insightsList" style="background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
-                            <div style="color: #718096; font-style: italic;">Loading insights...</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Analytics Summary -->
-                    <div id="analyticsSummary" style="margin-top: 15px; display: none;">
-                        <div class="stats">
-                            <div class="stat"><div class="stat-label">Models Tracked</div><div class="stat-value" id="modelsTracked">-</div></div>
-                            <div class="stat"><div class="stat-label">Total Runs</div><div class="stat-value" id="totalRuns">-</div></div>
-                            <div class="stat"><div class="stat-label">Data Points</div><div class="stat-value" id="dataPoints">-</div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Stats Summary -->
-            <div class="card">
-                <h2>📋 Summary Stats</h2>
-                <div class="stats">
-                    <div class="stat"><div class="stat-label">Models</div><div class="stat-value">{len(rankings)}</div></div>
-                    <div class="stat"><div class="stat-label">Tasks</div><div class="stat-value">5</div></div>
-                    <div class="stat"><div class="stat-label">Errors</div><div class="stat-value">{len(error_data)}</div></div>
-                    <div class="stat"><div class="stat-label">Time</div><div class="stat-label" style="color:#2d3748; font-weight:600;">{datetime.now().strftime("%H:%M:%S")}</div></div>
+                    <div class="progress-text" id="progressText">Initializing...</div>
                 </div>
             </div>
         </div>
 
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <div class="kpi-label">Average Score</div>
+                <div class="kpi-value">{avg_score:.3f}</div>
+                <div class="kpi-change {'positive' if avg_score > 0.5 else 'negative'}">
+                    {'↑' if avg_score > 0.5 else '↓'} {(avg_score * 100):.1f}%
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="kpi-label">Tasks Solved</div>
+                <div class="kpi-value">{tasks_solved}/{total_tasks}</div>
+                <div class="kpi-change {'positive' if success_rate > 50 else 'negative'}">
+                    {'↑' if success_rate > 50 else '↓'} {success_rate:.1f}%
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div class="kpi-label">Hard Task Accuracy</div>
+                <div class="kpi-value">{hard_accuracy:.2f}</div>
+                <div class="kpi-change {'positive' if hard_accuracy > 0.3 else 'negative'}">
+                    {'↑' if hard_accuracy > 0.3 else '↓'} {(hard_accuracy * 100):.1f}%
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="kpi-label">Models Active</div>
+                <div class="kpi-value">{len(rankings)}</div>
+                <div class="kpi-change positive">● Operational</div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="kpi-label">Runtime</div>
+                <div class="kpi-value">{datetime.now().strftime("%H:%M")}</div>
+                <div class="kpi-change positive">UTC</div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Column -->
+            <div class="left-column">
+                <!-- Leaderboard -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="section-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            Leaderboard
+                        </div>
+                    </div>
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Rank</th>
+                                <th>Model</th>
+                                <th style="text-align: center;">Easy</th>
+                                <th style="text-align: center;">Medium</th>
+                                <th style="text-align: center;">Hard</th>
+                                <th style="text-align: right;">Average</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {table_rows}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Charts Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Model Performance</div>
+                        </div>
+                        {'<div class="chart-container"><canvas id="modelChart"></canvas></div>' if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see performance metrics</div></div>'}
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Difficulty Analysis</div>
+                        </div>
+                        {'<div class="chart-container"><canvas id="difficultyChart"></canvas></div>' if has_leaderboard else '<div class="empty-state"><div class="empty-state-title">No Data</div><div class="empty-state-desc">Run benchmark to see difficulty breakdown</div></div>'}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="right-column">
+                <!-- AI Insights -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <div class="section-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                            AI Insights
+                        </div>
+                    </div>
+                    <div class="insights-list" id="insightsList">
+                        <div class="insight-item">
+                            <div class="insight-icon success">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div class="insight-content">
+                                <div class="insight-title">Schema Understanding</div>
+                                <div class="insight-desc">Models show strong performance on table/column reference tasks</div>
+                            </div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon warning">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </div>
+                            <div class="insight-content">
+                                <div class="insight-title">Aggregation Challenges</div>
+                                <div class="insight-desc">Complex GROUP BY and aggregate functions need improvement</div>
+                            </div>
+                        </div>
+                        <div class="insight-item">
+                            <div class="insight-icon error">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            </div>
+                            <div class="insight-content">
+                                <div class="insight-title">Complex Query Reasoning</div>
+                                <div class="insight-desc">Multi-constraint queries show instability in reasoning chains</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Taxonomy -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Error Distribution</div>
+                    </div>
+                    {'<div class="chart-container" style="height: 200px;"><canvas id="errorChart"></canvas></div>' if has_errors else '<div class="empty-state"><div class="empty-state-title">No Errors</div><div class="empty-state-desc">Perfect execution - no errors to analyze</div></div>'}
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <!-- Footer -->
         <footer>
-            <a href="/leaderboard" class="api-link">📥 JSON Leaderboard</a> |
-            <a href="/error_taxonomy" class="api-link">📥 Error Taxonomy</a> |
-            <a href="/docs" class="api-link">📖 API Docs</a>
+            <div class="footer-links">
+                <a href="/leaderboard" class="footer-link">API Leaderboard</a>
+                <span class="footer-divider">|</span>
+                <a href="/error_taxonomy" class="footer-link">Error Taxonomy</a>
+                <span class="footer-divider">|</span>
+                <a href="/docs" class="footer-link">Documentation</a>
+                <span class="footer-divider">|</span>
+                <a href="https://github.com/nareshchandu17/SQLBench-OpenEnv" class="footer-link">GitHub</a>
+            </div>
         </footer>
     </div>
 
@@ -934,35 +1850,88 @@ def generate_dashboard_html(
         {difficulty_chart_init}
         {error_chart_init}
         
+        // Premium JavaScript Features
+        
+        // Toast Notification System
+        function showToast(title, message, type = 'info') {{
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            
+            const icons = {{
+                success: '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+                error: '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+                warning: '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+                info: '<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+            }};
+            
+            toast.innerHTML = `
+                ${{icons[type]}}
+                <div class="toast-content">
+                    <div class="toast-title">${{title}}</div>
+                    <div class="toast-message">${{message}}</div>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {{
+                toast.style.animation = 'toastIn 0.3s ease';
+            }});
+            
+            // Remove after 5 seconds
+            setTimeout(() => {{
+                toast.style.animation = 'toastOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }}, 5000);
+        }}
+        
+        // Particle Animation System
+        function initParticles() {{
+            const container = document.getElementById('particles');
+            const particleCount = 30;
+            
+            for (let i = 0; i < particleCount; i++) {{
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDuration = (15 + Math.random() * 20) + 's';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.opacity = Math.random() * 0.5 + 0.2;
+                container.appendChild(particle);
+            }}
+        }}
+        
+        // Initialize particles on load
+        initParticles();
+        
         // Benchmark execution
         let currentJobId = null;
         let pollingInterval = null;
         
         async function runBenchmark() {{
             const btn = document.getElementById('runBenchmarkBtn');
-            const status = document.getElementById('benchmarkStatus');
-            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.getElementById('progressContainer');
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
             
-            // Disable button
+            // Premium loading state
             btn.disabled = true;
-            btn.style.opacity = '0.6';
-            btn.style.cursor = 'not-allowed';
-            btn.textContent = '⏳ Starting...';
+            btn.classList.add('loading');
+            btn.querySelector('span').textContent = 'Initializing...';
             
-            status.textContent = 'Initializing benchmark...';
-            progressBar.style.display = 'block';
+            // Show progress container with animation
+            progressContainer.style.display = 'block';
             progressFill.style.width = '0%';
-            progressText.textContent = '';
+            progressText.textContent = 'Preparing benchmark environment...';
+            
+            showToast('Benchmark Started', 'Initializing SQL evaluation environment', 'info');
             
             try {{
-                // Start benchmark
                 const response = await fetch('/run-benchmark', {{
                     method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json'
-                    }}
+                    headers: {{ 'Content-Type': 'application/json' }}
                 }});
                 
                 if (!response.ok) {{
@@ -972,20 +1941,18 @@ def generate_dashboard_html(
                 const data = await response.json();
                 currentJobId = data.job_id;
                 
-                // Start polling
+                showToast('Benchmark Running', `Job ID: ${{currentJobId.substring(0, 8)}}`, 'info');
                 startPolling();
                 
             }} catch (error) {{
                 console.error('Failed to start benchmark:', error);
-                status.textContent = `❌ Failed to start: ${{error.message}}`;
+                showToast('Error', `Failed to start benchmark: ${{error.message}}`, 'error');
                 resetButton();
             }}
         }}
         
         function startPolling() {{
-            if (pollingInterval) {{
-                clearInterval(pollingInterval);
-            }}
+            if (pollingInterval) clearInterval(pollingInterval);
             
             pollingInterval = setInterval(async () => {{
                 if (!currentJobId) return;
@@ -1005,14 +1972,13 @@ def generate_dashboard_html(
                     console.error('Polling error:', error);
                     clearInterval(pollingInterval);
                     pollingInterval = null;
-                    document.getElementById('benchmarkStatus').textContent = '❌ Connection lost';
+                    showToast('Connection Lost', 'Lost connection to benchmark server', 'error');
                     resetButton();
                 }}
             }}, 2000);
         }}
         
         function updateProgress(data) {{
-            const status = document.getElementById('benchmarkStatus');
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
             const btn = document.getElementById('runBenchmarkBtn');
@@ -1023,32 +1989,33 @@ def generate_dashboard_html(
                 
                 progressFill.style.width = `${{progress}}%`;
                 progressText.textContent = 
-                    `${{data.completed_tasks}}/${{data.total_tasks}} tasks | ${{data.current_model}} | ${{data.current_task}}`;
+                    `${{data.completed_tasks}}/${{data.total_tasks}} tasks · ${{data.current_model || 'Loading...'}} · ${{data.current_task || 'Initializing'}}`;
                 
-                status.textContent = '🏃 Running benchmark...';
-                btn.textContent = `⏳ Running (${{data.completed_tasks}}/${{data.total_tasks}})`;
+                btn.querySelector('span').textContent = `Running ${{data.completed_tasks}}/${{data.total_tasks}}`;
             }}
         }}
         
         function handleCompletion(data) {{
-            const status = document.getElementById('benchmarkStatus');
             const btn = document.getElementById('runBenchmarkBtn');
             const progressText = document.getElementById('progressText');
             
             if (data.status === 'completed') {{
-                status.textContent = '✅ Benchmark completed successfully!';
-                progressText.textContent = '🎉 All tasks completed. Refreshing results...';
-                btn.textContent = '✅ Completed';
+                showToast('Benchmark Complete', 'All evaluation tasks finished successfully', 'success');
+                progressText.textContent = '✓ Benchmark completed successfully';
+                btn.querySelector('span').textContent = 'Completed';
                 
-                // Refresh dashboard after 2 seconds
+                // Animate refresh
                 setTimeout(() => {{
-                    window.location.reload();
+                    document.body.style.opacity = '0';
+                    setTimeout(() => {{
+                        window.location.reload();
+                    }}, 300);
                 }}, 2000);
                 
             }} else if (data.status === 'failed') {{
-                status.textContent = `❌ Benchmark failed: ${{data.error || 'Unknown error'}}`;
-                progressText.textContent = '💥 Check logs for details';
-                btn.textContent = '❌ Failed';
+                showToast('Benchmark Failed', data.error || 'An unknown error occurred', 'error');
+                progressText.textContent = '✗ Benchmark failed - see error details';
+                btn.querySelector('span').textContent = 'Failed';
                 resetButton();
             }}
         }}
@@ -1056,9 +2023,8 @@ def generate_dashboard_html(
         function resetButton() {{
             const btn = document.getElementById('runBenchmarkBtn');
             btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.cursor = 'pointer';
-            btn.textContent = '🚀 Run Benchmark';
+            btn.classList.remove('loading');
+            btn.querySelector('span').textContent = 'Run Benchmark';
         }}
         
         // Analytics functionality
@@ -1165,7 +2131,7 @@ def generate_dashboard_html(
                 colorIndex++;
             }});
             
-            // Create chart
+            // Create chart with premium dark theme
             analyticsChart = new Chart(ctx, {{
                 type: 'line',
                 data: {{
@@ -1177,35 +2143,57 @@ def generate_dashboard_html(
                     maintainAspectRatio: false,
                     plugins: {{
                         title: {{
-                            display: true,
-                            text: 'Model Performance Over Time',
-                            font: {{
-                                size: 16,
-                                weight: 'bold'
-                            }}
+                            display: false
                         }},
                         legend: {{
                             display: true,
-                            position: 'top'
+                            position: 'top',
+                            labels: {{
+                                color: '#a1a1aa',
+                                font: {{ family: 'Inter', size: 12 }},
+                                usePointStyle: true,
+                                padding: 20
+                            }}
+                        }},
+                        tooltip: {{
+                            backgroundColor: 'rgba(18, 18, 26, 0.95)',
+                            titleColor: '#fafafa',
+                            bodyColor: '#a1a1aa',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {{
+                                label: (ctx) => `${{ctx.dataset.label}}: ${{ctx.parsed.y.toFixed(3)}}`
+                            }}
                         }}
                     }},
                     scales: {{
                         x: {{
                             display: true,
+                            grid: {{ color: 'rgba(255, 255, 255, 0.05)' }},
+                            ticks: {{
+                                color: '#71717a',
+                                font: {{ family: 'JetBrains Mono', size: 11 }}
+                            }},
                             title: {{
-                                display: true,
-                                text: 'Benchmark Run (ID)'
+                                display: false
                             }}
                         }},
                         y: {{
                             display: true,
-                            title: {{
-                                display: true,
-                                text: 'Average Score'
-                            }},
                             min: 0,
-                            max: 1
+                            max: 1,
+                            grid: {{ color: 'rgba(255, 255, 255, 0.05)' }},
+                            ticks: {{
+                                color: '#71717a',
+                                font: {{ family: 'JetBrains Mono', size: 11 }},
+                                callback: (val) => val.toFixed(1)
+                            }}
                         }}
+                    }},
+                    interaction: {{
+                        intersect: false,
+                        mode: 'index'
                     }}
                 }}
             }});
@@ -1215,15 +2203,62 @@ def generate_dashboard_html(
             const insightsList = document.getElementById('insightsList');
             
             if (!insights || insights.length === 0) {{
-                insightsList.innerHTML = '<div style="color: #718096; font-style: italic;">No insights available. Run more benchmarks to generate analytics.</div>';
+                insightsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-title">No Insights Available</div>
+                        <div class="empty-state-desc">Run more benchmarks to generate AI-powered analytics</div>
+                    </div>`;
                 return;
             }}
             
-            const insightsHtml = insights.map(insight => 
-                `<div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border-left: 3px solid #667eea;">
-                    <div style="font-size: 13px; line-height: 1.4;">${{insight}}</div>
-                </div>`
-            ).join('');
+            // Map insights to appropriate severity levels
+            const severityMap = {{
+                'strong': 'success',
+                'good': 'success',
+                'excellent': 'success',
+                'weak': 'error',
+                'poor': 'error',
+                'needs': 'warning',
+                'improvement': 'warning',
+                'challenged': 'warning'
+            }};
+            
+            const insightsHtml = insights.map((insight, index) => {{
+                const lowerInsight = insight.toLowerCase();
+                let severity = 'info';
+                
+                // Determine severity based on keywords
+                for (const [keyword, level] of Object.entries(severityMap)) {{
+                    if (lowerInsight.includes(keyword)) {{
+                        severity = level;
+                        break;
+                    }}
+                }}
+                
+                const icons = {{
+                    success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+                    warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+                    error: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+                    info: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+                }};
+                
+                // Extract a title and description from the insight
+                const sentences = insight.split('. ');
+                const title = sentences[0].replace(/^(Strong|Weak|Poor|Good|Excellent)\s+/i, '').replace(/:/g, '');
+                const description = sentences.slice(1).join('. ') || insight;
+                
+                return `
+                    <div class="insight-item" style="animation: fadeIn 0.3s ease ${{index * 0.1}}s both;">
+                        <div class="insight-icon ${{severity}}">
+                            ${{icons[severity]}}
+                        </div>
+                        <div class="insight-content">
+                            <div class="insight-title">${{title}}</div>
+                            <div class="insight-desc">${{description}}</div>
+                        </div>
+                    </div>
+                `;
+            }}).join('');
             
             insightsList.innerHTML = insightsHtml;
         }}
