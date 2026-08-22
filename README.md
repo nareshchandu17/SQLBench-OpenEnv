@@ -6,7 +6,7 @@ colorTo: blue
 sdk: docker
 pinned: false
 license: mit
-short_description: SQL debugging benchmark environment for evaluating LLM agents
+short_description: SQL debugging benchmark for evaluating LLM agents
 ---
 
 # SQLBench-OpenEnv
