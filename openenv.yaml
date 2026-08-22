@@ -1,11 +1,11 @@
 name: sql-query-env
-version: "1.0.0"
+version: "1.1.0"
 description: >
   A reinforcement learning environment where an AI agent debugs and
   optimizes SQL queries against an in-memory SQLite database.
   Models a real-world data engineering task with deterministic graders.
 
-author: "your-hf-username"
+author: "nareshchandu17"
 license: "MIT"
 
 observation_space:
@@ -35,11 +35,11 @@ observation_space:
 
 action_space:
   type: object
-  description: "Agent submits a fixed SQL query"
+  description: "Agent submits a corrected SQL query"
   properties:
     query:
       type: string
-      description: "The corrected SQL query to execute"
+      description: "A SQL SELECT statement — only SELECT is permitted"
 
 reward_space:
   type: object
@@ -50,14 +50,15 @@ reward_space:
       maximum: 1.0
     breakdown:
       type: object
-      description: "Partial scores for each grading component"
+      description: "Partial scores for result_match, column_match, row_count, efficiency_bonus, syntax_penalty"
 
+tasks:
   - id: fix_syntax_simple
     name: "Fix Syntax Error (Basic)"
     difficulty: easy
     description: "Correct a SQL query with a syntax error that prevents column retrieval."
     max_steps: 5
-    
+
   - id: fix_table_name
     name: "Fix Table Reference"
     difficulty: easy
@@ -67,7 +68,7 @@ reward_space:
   - id: fix_join_logic
     name: "Fix Incorrect JOIN"
     difficulty: medium
-    description: "Identify and fix an incorrect relate condition in a JOIN clause."
+    description: "Identify and fix an incorrect join condition in a JOIN clause."
     max_steps: 8
 
   - id: fix_aggregate_logic

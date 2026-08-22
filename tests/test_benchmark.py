@@ -193,9 +193,9 @@ class TestGenerateLeaderboard:
     def _make_results(self) -> list:
         mr1 = ModelResult(model_id="model-a", model_name="Model A")
         mr1.task_results = [
-            TaskResult("fix_syntax_simple", "easy",   0.9, 2, True,  "success",    0.8, 1.0),
-            TaskResult("fix_join_logic",     "medium", 0.6, 4, False, "join_error", 0.5, 2.0),
-            TaskResult("multi_constraint_query", "hard", 0.3, 5, False, "logic_error", 0.2, 3.0),
+            TaskResult("fix_syntax_simple",     "easy",   0.9, 2, True,  "success",     0.8,  1.0),
+            TaskResult("fix_join_logic",         "medium", 0.6, 4, False, "join_error",  0.5,  2.0),
+            TaskResult("multi_constraint_query", "hard",   0.3, 5, False, "logic_error", 0.2,  3.0),
         ]
         mr1.error_counts.add("success")
         mr1.error_counts.add("join_error")
@@ -203,9 +203,9 @@ class TestGenerateLeaderboard:
 
         mr2 = ModelResult(model_id="model-b", model_name="Model B")
         mr2.task_results = [
-            TaskResult("fix_syntax_simple", "easy",   0.7, 3, False, "syntax_error", 0.6, 1.2),
-            TaskResult("fix_join_logic",     "medium", 0.4, 5, False, "logic_error",  0.3, 2.5),
-            TaskResult("multi_constraint_query", "hard", 0.1, 5, False, "logic_error", 0.05, 3.5),
+            TaskResult("fix_syntax_simple",     "easy",   0.7, 3, False, "syntax_error", 0.6,  1.2),
+            TaskResult("fix_join_logic",         "medium", 0.4, 5, False, "logic_error",  0.3,  2.5),
+            TaskResult("multi_constraint_query", "hard",   0.1, 5, False, "logic_error",  0.05, 3.5),
         ]
         mr2.error_counts.add("syntax_error")
         mr2.error_counts.add("logic_error")
@@ -234,7 +234,7 @@ class TestGenerateLeaderboard:
         results = self._make_results()
         with tempfile.TemporaryDirectory() as tmpdir:
             lb = generate_leaderboard(results, output_dir=tmpdir)
-            avgs = [e["average"] for e in lb["rankings"]]
+            avgs = [e["average_score"] for e in lb["rankings"]]
             assert avgs == sorted(avgs, reverse=True)
 
     def test_leaderboard_ranks_assigned(self):
@@ -252,7 +252,7 @@ class TestGenerateLeaderboard:
                 assert "easy" in entry
                 assert "medium" in entry
                 assert "hard" in entry
-                assert "average" in entry
+                assert "average_score" in entry
 
     def test_benchmark_results_json_valid(self):
         results = self._make_results()
@@ -289,7 +289,7 @@ class TestGenerateLeaderboard:
                 assert 0.0 <= entry["easy"] <= 1.0
                 assert 0.0 <= entry["medium"] <= 1.0
                 assert 0.0 <= entry["hard"] <= 1.0
-                assert 0.0 <= entry["average"] <= 1.0
+                assert 0.0 <= entry["average_score"] <= 1.0
 
     def test_print_leaderboard_runs_without_error(self, capsys):
         results = self._make_results()

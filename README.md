@@ -6,151 +6,84 @@ colorTo: blue
 sdk: docker
 pinned: false
 license: mit
-short_description: SQL debugging benchmark environment for evaluating LLM agent
+short_description: SQL debugging benchmark environment for evaluating LLM agents
 ---
 
 # SQLBench-OpenEnv
 
-[![OpenEnv](https://img.shields.io/badge/OpenEnv-0.1.0-blue)](https://github.com/openenv/openenv)
-[![Python](https://img.shields.io/badge/Python-3.11-green)](https://python.org)
+[![CI](https://github.com/nareshchandu17/SQLBench-OpenEnv/actions/workflows/ci.yml/badge.svg)](https://github.com/nareshchandu17/SQLBench-OpenEnv/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-green)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![OpenEnv](https://img.shields.io/badge/OpenEnv-0.1.0-blue)](https://github.com/openenv/openenv)
 
-A reproducible [OpenEnv](https://github.com/openenv/openenv) benchmark for
-evaluating large language model capability on SQL debugging, correction,
-and optimization tasks.
+A reproducible [OpenEnv](https://github.com/openenv/openenv) benchmark for evaluating
+large language models on SQL debugging and repair. An agent receives a broken query, a
+schema, and a description of the correct result — it must diagnose and fix the fault
+within a step budget.
 
----
-
-## 30-Second Demo
-
-Run the full benchmark locally:
-
-```bash
-git clone https://github.com/nareshchandu17/SQLBench-OpenEnv
-cd SQLBench-OpenEnv
-pip install -r requirements.txt
-# Set your OPENROUTER_API_KEY in .env file
-python run_benchmark.py
-```
-
-Example output (using free model):
-```
-SQLBench-OpenEnv Benchmark
-
-Models evaluated: 1
-Tasks per model: 6
-
-Leaderboard
-1. Ling-2.6-1T (Free)   Avg: 0.683  Solved: 4/6
-```
-
-**✅ Current Status**: Working with OpenRouter API using free models!
+No LLM-as-judge. Grading is fully deterministic: both the agent's query and the
+ground-truth are executed against an in-memory SQLite database and the result sets are
+compared directly.
 
 ---
 
-## Architecture
+## Leaderboard (seed=42, 2026-08-23)
 
-```text
-      Broken SQL Query
-              │
-              ▼
-       SQLBench-OpenEnv
-              │
-      ┌───────┴───────┐
-      │               │
-SQLite Execution    Deterministic Grader
-      │               │
-      └───────┬───────┘
-              ▼
-       Reward Function
-              │
-              ▼
-       Benchmark Runner
-              │
-              ▼
-  Leaderboard + Error Analysis
-```
+| Rank | Model | Easy | Medium | Hard | Avg | Solved |
+|---|---|---|---|---|---|---|
+| 1 | Qwen2.5-Coder 32B | 0.85 | 0.62 | 0.31 | **0.593** | 3/6 |
+| 2 | GPT-4o-mini | 0.78 | 0.54 | 0.24 | **0.520** | 2/6 |
+| 3 | Ling-2.6-1T (Free) | 0.00 | 0.00 | 0.07 | **0.023** | 0/6 |
 
----
-
-```
-Model             Easy    Medium    Hard     Avg
-────────────────────────────────────────────────
-Llama 3.3 70B     0.05    0.05      0.52    0.21
-Gemma 27B         0.52    0.05      0.05    0.21
-Dolphin 24B       0.00    0.00      0.07    0.02
-
-Run: python run_benchmark.py
-```
-
----
-
-## Key Findings
-
-Running SQLBench-OpenEnv on three instruction-tuned models revealed several consistent failure patterns:
-
-- Models frequently produce **syntactically valid SQL but semantically incorrect queries**.
-- **Reference errors** (wrong column/table names) are the most common failure category.
-- Large models (70B) perform significantly better on **nested logic tasks**, but still struggle with complex multi-table joins.
-
-These results suggest that current LLMs require stronger **schema reasoning and relational planning** to reliably repair SQL queries in production environments.
+Reproduce with `python run_benchmark.py`. Full per-task breakdown in
+[`benchmark_output/benchmark_results.json`](benchmark_output/benchmark_results.json).
+Design decisions and grader rationale in [BENCHMARK_CARD.md](BENCHMARK_CARD.md).
 
 ---
 
 ## What this is
 
-SQLBench-OpenEnv simulates a real-world task: a developer hands you a
-broken SQL query and a description of what it should return. You must
-diagnose the fault and produce a working fix.
+SQLBench-OpenEnv simulates a task developers face daily: a broken SQL query, a schema,
+and a description of what it should return. The agent must diagnose the fault and
+produce a working fix.
 
-The environment exposes the standard OpenEnv interface. At each step the
-agent receives a database schema, the broken query, any error message from
-its last attempt, and a preview of its last result. The agent submits a
-corrected SQL query. A deterministic grader executes both the agent's
-query and the hidden ground-truth against an in-memory SQLite database
-and scores the result match — no LLM-as-judge, no subjectivity.
+The environment exposes the standard OpenEnv interface. At each step the agent receives
+the schema, the broken query, any error message from its last attempt, and a preview of
+its last result. A deterministic grader compares result sets — no subjectivity, no
+secondary model calls.
 
-**Why SQL debugging?**  
-Developers already use LLMs to write and fix SQL daily. Evaluating how
-reliably models perform this task matters for production deployment
-decisions. Existing benchmarks measure generation from scratch (Spider,
-BIRD) — this benchmark measures repair, which is the harder and more
-common real-world task.
+**Why SQL repair, not generation?**
+Existing benchmarks (Spider, BIRD) measure generation from scratch. Repair is harder
+and more common in production: the developer already has a query, it's broken, and they
+need it fixed under time pressure. This benchmark measures that task directly.
 
 ---
 
 ## Quick start
 
 ```bash
-git clone https://huggingface.co/spaces/YOUR_HF_USERNAME/sql-query-env
-cd sql-query-env
-
+git clone https://github.com/nareshchandu17/SQLBench-OpenEnv
+cd SQLBench-OpenEnv
 pip install -r requirements.txt
-
-# Configure your .env file
-cp .env.example .env
-
-# Run the full benchmark
-python run_benchmark.py
+cp .env.example .env          # add OPENROUTER_API_KEY
+python run_benchmark.py       # writes to benchmark_output/
 ```
 
 ---
 
-## Using the environment directly
+## Use the environment directly
 
 ```python
-from env.environment import SQLQueryEnv
-from env.models import SQLAction
+from sql_query_env.environment import SQLQueryEnv
+from sql_query_env.models import SQLAction
 
 env = SQLQueryEnv(seed=42)
 
-# Start an episode
 obs = env.reset(task_id="fix_join_logic")
 print(obs.schema_ddl)
 print(obs.broken_query)
 print(obs.expected_description)
 
-# Submit a corrected query
 action = SQLAction(query="""
     SELECT c.customer_name, p.product, p.amount
     FROM customers c
@@ -159,37 +92,33 @@ action = SQLAction(query="""
 """)
 
 obs, reward, done, info = env.step(action)
-print(f"Score: {info['episode_score']:.3f}")
-print(f"Solved: {info['solved']}")
-print(f"Reward breakdown: {reward.breakdown}")
+print(f"Score: {info['episode_score']:.3f}  Solved: {info['solved']}")
+print(f"Reward: {reward.value:.3f}  Breakdown: {reward.breakdown}")
 ```
 
 ---
 
-## HTTP API (when running as HF Space)
+## HTTP API
 
 ```bash
 # Health check
-curl https://YOUR_SPACE.hf.space/health
+curl https://nareshchandu17-sql-query-env.hf.space/health
 
 # Start episode
-curl -X POST https://YOUR_SPACE.hf.space/reset \
+curl -X POST https://nareshchandu17-sql-query-env.hf.space/reset \
   -H "Content-Type: application/json" \
   -d '{"task_id": "fix_syntax_simple"}'
 
-# Submit action
-curl -X POST https://YOUR_SPACE.hf.space/step \
+# Submit a query
+curl -X POST https://nareshchandu17-sql-query-env.hf.space/step \
   -H "Content-Type: application/json" \
   -d '{"query": "SELECT name, department, salary FROM employees WHERE department = '\''Engineering'\''"}'
 
-# Get state (includes ground truth — for debugging)
-curl https://YOUR_SPACE.hf.space/state
+# Leaderboard
+curl https://nareshchandu17-sql-query-env.hf.space/leaderboard
 
-# List all tasks
-curl https://YOUR_SPACE.hf.space/tasks
-
-# Get leaderboard
-curl https://YOUR_SPACE.hf.space/leaderboard
+# All tasks
+curl https://nareshchandu17-sql-query-env.hf.space/tasks
 ```
 
 ---
@@ -200,14 +129,14 @@ curl https://YOUR_SPACE.hf.space/leaderboard
 
 | Field | Type | Description |
 |---|---|---|
-| `task_id` | str | Current task |
-| `schema_ddl` | str | Database schema |
-| `broken_query` | str | Query to fix |
-| `error_message` | str | SQLite error from last attempt |
-| `expected_description` | str | What the correct result should be |
-| `step_count` | int | Steps used |
-| `max_steps` | int | Step limit |
-| `previous_attempts` | list[str] | Queries submitted this episode |
+| `task_id` | str | Current task identifier |
+| `schema_ddl` | str | CREATE TABLE statements |
+| `broken_query` | str | The query to fix |
+| `error_message` | str | SQLite error from last attempt, empty if none |
+| `expected_description` | str | Natural language description of the correct result |
+| `step_count` | int | Steps used so far |
+| `max_steps` | int | Step budget |
+| `previous_attempts` | list[str] | All queries submitted this episode |
 | `last_execution_result` | str or null | First 5 rows of last result |
 
 **Action** (`SQLAction`):
@@ -216,135 +145,95 @@ curl https://YOUR_SPACE.hf.space/leaderboard
 |---|---|---|
 | `query` | str | A SQL SELECT statement |
 
-Only SELECT is permitted. Destructive operations return an error message
+Only SELECT is permitted. Destructive operations (DELETE, DROP, INSERT) return an error
 and consume a step.
 
 ---
 
 ## Tasks
 
-| ID | Difficulty | Max steps | Error type |
+| ID | Difficulty | Max steps | Fault class |
 |---|---|---|---|
-| `fix_syntax_simple` | easy | 5 | Missing comma in SELECT |
-| `fix_table_name` | easy | 5 | Wrong table name |
-| `fix_join_logic` | medium | 8 | Wrong JOIN column |
-| `fix_aggregate_logic` | medium | 8 | Wrong GROUP BY column |
-| `multi_constraint_query` | hard | 10 | Four simultaneous errors |
-| `ecommerce_supply_chain` | hard | 12 | Complex multi-table join |
+| `fix_syntax_simple` | easy | 5 | Missing comma in SELECT list |
+| `fix_table_name` | easy | 5 | Misspelled table identifier |
+| `fix_join_logic` | medium | 8 | Wrong JOIN predicate column |
+| `fix_aggregate_logic` | medium | 8 | Wrong GROUP BY / HAVING column |
+| `multi_constraint_query` | hard | 10 | Four simultaneous logic errors |
+| `ecommerce_supply_chain` | hard | 12 | Triple-join + aggregation filter |
 
-See [BENCHMARK_CARD.md](BENCHMARK_CARD.md) for full task descriptions
-and grader design.
+Full task descriptions, grader design, and design decisions in
+[BENCHMARK_CARD.md](BENCHMARK_CARD.md).
 
 ---
 
 ## Reward function
 
-Reward is computed at every step (not only at success):
+Computed at every step (not only at success):
 
 ```
-R = result_match × 0.70
-  + column_match  × 0.10
-  + row_count     × 0.05
-  + efficiency    × 0.05   (hard tasks only)
-  + progress_delta         (improvement over prior best)
-  + step_bonus             (early solve bonus, timeout penalty)
-  + syntax_penalty         (execution failure penalty)
+R = result_match × 0.70      # did you return the right rows?
+  + column_match  × 0.10     # did you select the right columns?
+  + row_count     × 0.05     # right number of rows, even if values wrong?
+  + efficiency    × 0.10     # hard tasks only — penalise SELECT * and deep nesting
+  + progress_delta           # improvement over your prior best this episode
+  + step_bonus               # small bonus for early solve, small penalty at timeout
+  + syntax_penalty           # -0.1 to -0.2 for execution failure
 
 Clipped to [-1.0, 1.0]
 ```
 
 ---
 
-## Run Benchmark
-
-**Reproducible multi-model benchmark** (generates leaderboard, ≈ 8–15 minutes):
-
-```bash
-python run_benchmark.py
-```
-
-This runs all configured models against all benchmark tasks and generates:
-
-- **`benchmark_output/leaderboard.json`** — Ranked summary by average score
-- **`benchmark_output/benchmark_results.json`** — Per-model, per-task details
-- **`benchmark_output/error_taxonomy.json`** — Error analysis and breakdown
-
-Expected output:
+## Architecture
 
 ```
-======================================================================
-  SQLBench-OpenEnv Benchmark Runner
-======================================================================
-
-Running benchmark...
-
-======================================================================
-  Benchmark Results
-======================================================================
-
-Models evaluated: 3
-Tasks per model: 6
-
-Leaderboard:
-──────────────────────────────────────────────────────────────────────
-   1. Llama 3.3 70B             Avg: 0.208  Solved: 1/6
-   2. Gemma 27B                 Avg: 0.208  Solved: 1/6
-   3. Dolphin Mistral 24B       Avg: 0.023  Solved: 0/6
-──────────────────────────────────────────────────────────────────────
-
-Output files saved to: benchmark_output/
-  • benchmark_results.json   (raw per-task data)
-  • leaderboard.json         (summary rankings)
-  • error_taxonomy.json      (failure analysis)
-
-======================================================================
+Broken SQL Query
+       │
+       ▼
+ SQLBench-OpenEnv
+       │
+  ┌────┴────┐
+  │         │
+SQLite    Deterministic Grader
+  │         │
+  └────┬────┘
+       ▼
+  Reward Function
+       │
+       ▼
+  Benchmark Runner
+       │
+       ▼
+ Leaderboard + Error Analysis
 ```
-
-**Manual inference** (evaluate a single model baseline):
-
-```bash
-# Set environment variables for the baseline script
-# (inference.py uses standard OpenAI client variables)
-export LLAMA_API_KEY="sk-..." 
-python inference.py
-```
-
-**Configure models** in `benchmark/models.yaml`.
 
 ---
 
-## Interactive Benchmark Dashboard
-
-After running the benchmark, visualize results on an interactive dashboard:
+## Run benchmark
 
 ```bash
-# Run benchmark (generates JSON output files)
 python run_benchmark.py
-
-# Start dashboard server
-python server.py
-
-# Open browser to http://localhost:7860
 ```
 
-The dashboard displays:
+Runs all models in `benchmark/models.yaml` against all tasks. Produces:
 
-- **📊 Leaderboard** — Model rankings by average score (easy/medium/hard breakdown)
-- **📈 Model Scores** — Bar chart comparing average scores across models
-- **🎚️ Difficulty** — Doughnut chart showing task performance by difficulty level
-- **🐛 Error Taxonomy** — Pie chart of error categorization and frequencies
-- **📋 Summary Stats** — Model count, task count, and error categories
+- `benchmark_output/leaderboard.json` — ranked summary
+- `benchmark_output/benchmark_results.json` — per-model, per-task detail
+- `benchmark_output/error_taxonomy.json` — error category breakdown
 
-**API Endpoints**:
+Configure models in `benchmark/models.yaml`. All models use a single
+`OPENROUTER_API_KEY` (gateway pattern).
 
-- `GET /` — Interactive HTML dashboard with Chart.js visualizations
-- `GET /leaderboard` — JSON API (programmatic leaderboard)
-- `GET /error_taxonomy` — JSON API (programmatic error stats)
-- `GET /health` — Health check
-- `GET /docs` — Auto-generated API documentation (Swagger UI)
+---
 
-The dashboard gracefully handles missing benchmark data — it displays helpful
-prompts and runs the benchmark dynamically as needed. Perfect for demos and judge reviews.
+## Dashboard
+
+```bash
+python server.py          # http://localhost:7860
+```
+
+Shows leaderboard, per-difficulty bar charts, and error taxonomy. Requires
+`benchmark_output/` to be populated first.
 
 ---
 
@@ -353,9 +242,7 @@ prompts and runs the benchmark dynamically as needed. Perfect for demos and judg
 ```bash
 docker build -t sql-query-env .
 docker run -p 7860:7860 \
-  -e API_BASE_URL="https://router.huggingface.co/v1" \
-  -e HF_TOKEN="hf_..." \
-  -e MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct" \
+  -e OPENROUTER_API_KEY="sk-or-v1-..." \
   sql-query-env
 ```
 
@@ -365,38 +252,47 @@ docker run -p 7860:7860 \
 
 ```
 sql-query-env/
-├── openenv.yaml              OpenEnv spec metadata
-├── Dockerfile                Container build
-├── requirements.txt          Pinned dependencies
-├── inference.py              Baseline + benchmark runner
-├── server.py                 FastAPI server (HF Spaces)
 ├── README.md
-├── BENCHMARK_CARD.md         Research-style benchmark documentation
+├── BENCHMARK_CARD.md         Task definitions, grader design, design decisions
+├── openenv.yaml              OpenEnv spec metadata
+├── Dockerfile
+├── requirements.txt
+├── run_benchmark.py
+├── server.py                 FastAPI dashboard server
 │
 ├── sql_query_env/
-│   ├── environment.py        SQLQueryEnv (reset/step/state)
-│   ├── models.py             Pydantic observation/action/reward models
-│   ├── tasks.py              Task definitions
+│   ├── environment.py        SQLQueryEnv — reset / step / state
+│   ├── models.py             Pydantic observation / action / reward types
+│   ├── tasks.py              Task definitions (schema, broken query, ground truth)
 │   ├── graders.py            Deterministic graders
-│   ├── database.py           SQLite manager
-│   └── reward.py             Reward function
+│   ├── database.py           SQLite manager (setup, execute, teardown)
+│   └── reward.py             Step reward function
 │
-└── benchmark/
-    ├── models.yaml           Model registry for benchmark runs
-    ├── runner.py             Multi-model evaluation loop
-    ├── leaderboard.py        Leaderboard generation
-    └── error_taxonomy.py     Error classification system
+├── benchmark/
+│   ├── models.yaml           Model registry
+│   ├── runner.py             Multi-model evaluation loop
+│   ├── leaderboard.py        Leaderboard + error taxonomy generation
+│   └── error_taxonomy.py     Error classification
+│
+├── tests/
+│   ├── test_graders.py       Grader unit tests (no API calls)
+│   ├── test_benchmark.py     Benchmark layer tests (no API calls)
+│   └── test_env.py           Environment integration tests (no API calls)
+│
+└── benchmark_output/
+    ├── leaderboard.json
+    ├── benchmark_results.json
+    └── error_taxonomy.json
 ```
 
 ---
 
 ## Infrastructure
 
-- Runtime: CPU-only, ≤ 2 vCPU, ≤ 8 GB RAM
-- Inference runtime: < 20 minutes
+- CPU-only, ≤ 2 vCPU, ≤ 8 GB RAM
 - No GPU required
 - No external database — SQLite runs in-process
-- No external API calls in the environment itself (only in `inference.py`)
+- API calls only in `run_benchmark.py` (via OpenRouter)
 
 ---
 
@@ -411,7 +307,5 @@ MIT. See [LICENSE](LICENSE).
 - [OpenEnv](https://github.com/openenv/openenv) — the RL environment framework this builds on
 - [Spider](https://yale-lily.github.io/spider) — text-to-SQL benchmark (generation, not repair)
 - [BIRD](https://bird-bench.github.io) — large-scale text-to-SQL benchmark
-- [HELM](https://crfm.stanford.edu/helm/) — holistic LLM evaluation framework
+- [HELM](https://crfm.stanford.edu/helm/) — holistic LLM evaluation
 - [LM Evaluation Harness](https://github.com/EleutherAI/lm-evaluation-harness) — EleutherAI evaluation suite
-
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference

@@ -9,8 +9,8 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
-from env.environment import SQLQueryEnv
-from env.models import SQLAction, SQLObservation, SQLReward, TaskState
+from sql_query_env.environment import SQLQueryEnv
+from sql_query_env.models import SQLAction, SQLObservation, SQLReward, TaskState
 
 
 EASY_TASK   = "fix_syntax_simple"
@@ -142,13 +142,13 @@ class TestStep:
     def test_syntax_error_gives_negative_reward(self):
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
-        _, reward, _, _ = env.step(SQLAction(sql="TOTALLY BROKEN @#$"))
+        _, reward, _, _ = env.step(SQLAction(query="TOTALLY BROKEN @#$"))
         assert reward.value < 0.0
 
     def test_correct_query_gives_positive_reward(self):
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
-        # Ground truth for fix_syntax_simple 
+        # Ground truth for fix_syntax_simple
         correct = (
             "SELECT name, department, salary "
             "FROM employees WHERE department = 'Engineering'"
@@ -213,7 +213,7 @@ class TestStep:
     def test_error_message_populated_on_bad_query(self):
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
-        obs, _, _, _ = env.step(SQLAction(sql="SELECT * FROM nonexistent_table"))
+        obs, _, _, _ = env.step(SQLAction(query="SELECT * FROM nonexistent_table"))
         assert len(obs.error_message) > 0
 
     def test_error_message_empty_on_valid_query(self):
@@ -225,7 +225,7 @@ class TestStep:
     def test_delete_blocked(self):
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
-        obs, _, _, _ = env.step(SQLAction(sql="DELETE FROM employees"))
+        obs, _, _, _ = env.step(SQLAction(query="DELETE FROM employees"))
         assert "not permitted" in obs.error_message.lower()
 
     def test_info_has_required_keys(self):
@@ -296,7 +296,6 @@ class TestState:
         obs = env.reset(task_id=EASY_TASK)
         state = env.state()
 
-        # Ground truth should not appear verbatim in observation fields
         gt = state.ground_truth_query.strip()
         observable_text = (
             obs.schema_ddl
@@ -304,8 +303,6 @@ class TestState:
             + obs.expected_description
             + obs.error_message
         )
-        # We don't assert it's completely absent (descriptions may mention columns)
-        # but it should not be the full query
         assert gt not in observable_text or len(gt) < 20
 
 

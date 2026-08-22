@@ -8,13 +8,13 @@ import pytest
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from env.graders import (
+from sql_query_env.graders import (
     grade_result_match,
     grade_syntax,
     grade_efficiency,
     compute_task_score,
 )
-from env.database import DatabaseManager
+from sql_query_env.database import DatabaseManager
 
 
 # ── grade_result_match ────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ class TestGradeResultMatch:
         assert grade_result_match([{"name": "Alice"}], []) == 0.0
 
     def test_wrong_column_returns_partial(self):
-        agent   = [{"name": "Alice"}]
+        agent    = [{"name": "Alice"}]
         expected = [{"name": "Alice", "salary": 95000.0}]
         score = grade_result_match(agent, expected)
         assert 0.5 <= score <= 0.9

@@ -1,19 +1,34 @@
-# benchmark/models.yaml - SINGLE FREE MODEL
-# SQLBench-OpenEnv benchmark configuration
-# Uses Ling-2.6-1T (free) model that works without credits
+# benchmark/models.yaml
+# SQLBench-OpenEnv model registry
+# All models accessed via OpenRouter (single API key, gateway pattern).
+# Ordered: frontier first, then open-weight for comparison.
 
 benchmark_name: "SQLBench-OpenEnv"
-version: "1.0.0"
+version: "1.1.0"
 description: >
   Evaluation of LLM capability on SQL correction and optimization tasks.
   Covers syntax repair, join logic, aggregation correctness, and query efficiency.
 
-# Global provider configuration (gateway pattern)
+# Global provider configuration (gateway pattern — one key for all models)
 provider: "openrouter"
 api_key_env: "OPENROUTER_API_KEY"
 base_url: "https://openrouter.ai/api/v1"
 
 models:
+  # ── Frontier models ─────────────────────────────────────────────────────────
+  - id: "qwen2-5-coder-32b"
+    name: "Qwen2.5-Coder 32B"
+    model_string: "qwen/qwen-2.5-coder-32b-instruct"
+    max_tokens: 512
+    temperature: 0.1
+
+  - id: "gpt-4o-mini"
+    name: "GPT-4o-mini"
+    model_string: "openai/gpt-4o-mini"
+    max_tokens: 512
+    temperature: 0.1
+
+  # ── Open-weight baseline ─────────────────────────────────────────────────────
   - id: "ling-2-6-1t-free"
     name: "Ling-2.6-1T (Free)"
     model_string: "inclusionai/ling-2.6-1t:free"
@@ -21,7 +36,7 @@ models:
     temperature: 0.1
 
 # Tasks to include in the benchmark run.
-# Maps to task IDs in env/tasks.py.
+# Maps to task IDs in sql_query_env/tasks.py.
 benchmark_tasks:
   easy:
     - fix_syntax_simple
@@ -35,7 +50,7 @@ benchmark_tasks:
 
 # Evaluation settings
 settings:
-  max_steps_per_episode: 5     # Keep fast — 1 model × 5 tasks × 5 steps = 25 API calls max
-  runs_per_task: 1             # For reproducibility; increase to 3 for variance analysis
+  max_steps_per_episode: 5     # 3 models × 6 tasks × 5 steps = 90 API calls
+  runs_per_task: 1             # Increase to 3 for variance analysis
   seed: 42
   timeout_seconds: 300         # Per-task wall-clock timeout
