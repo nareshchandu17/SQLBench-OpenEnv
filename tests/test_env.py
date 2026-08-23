@@ -23,6 +23,7 @@ KNOWN_TASKS = [
     "fix_join_logic",
     "fix_aggregate_logic",
     "multi_constraint_query",
+    "ecommerce_supply_chain",
 ]
 
 
