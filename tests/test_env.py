@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 from sql_query_env.environment import SQLQueryEnv
-from sql_query_env.models import SQLAction, SQLObservation, SQLReward, TaskState
+from sql_query_env.models import SQLAction, SQLObservation, SQLReward, TaskState, PublicTaskState
 
 
 EASY_TASK   = "fix_syntax_simple"
@@ -264,18 +264,20 @@ class TestState:
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
         state = env.state()
-        assert isinstance(state, TaskState)
+        assert isinstance(state, PublicTaskState)
 
     def test_state_before_reset_raises(self):
         env = SQLQueryEnv(seed=42)
         with pytest.raises(RuntimeError, match="reset"):
             env.state()
 
-    def test_state_contains_ground_truth(self):
+    def test_state_does_not_contain_ground_truth(self):
+        """Public state must not contain ground truth (P0 #5)."""
         env = SQLQueryEnv(seed=42)
         env.reset(task_id=EASY_TASK)
         state = env.state()
-        assert "SELECT" in state.ground_truth_query.upper()
+        assert not hasattr(state, "ground_truth_query")
+        assert not hasattr(state, "expected_result")
 
     def test_state_task_id_matches_reset(self):
         env = SQLQueryEnv(seed=42)
@@ -292,19 +294,18 @@ class TestState:
         assert state.step_count == 2
 
     def test_ground_truth_not_in_observation(self):
-        """Ground truth must never leak into the agent's observation."""
+        """Ground truth must never leak into the agent's observation (P0 #5)."""
         env = SQLQueryEnv(seed=42)
         obs = env.reset(task_id=EASY_TASK)
         state = env.state()
 
-        gt = state.ground_truth_query.strip()
-        observable_text = (
-            obs.schema_ddl
-            + obs.broken_query
-            + obs.expected_description
-            + obs.error_message
-        )
-        assert gt not in observable_text or len(gt) < 20
+        # Public state must not contain ground truth fields
+        assert not hasattr(state, "ground_truth_query")
+        assert not hasattr(state, "expected_result")
+
+        # Observation must not contain ground truth fields
+        assert not hasattr(obs, "ground_truth_query")
+        assert not hasattr(obs, "expected_result")
 
 
 # ── reward structure ──────────────────────────────────────────────────────────

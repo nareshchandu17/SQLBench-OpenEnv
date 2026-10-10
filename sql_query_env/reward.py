@@ -18,6 +18,7 @@ def compute_step_reward(
     max_steps: int,
     task_difficulty: str,
     is_final_step: bool,
+    ground_truth_query: str = "",
 ) -> SQLReward:
     """
     Computes the reward for a single step.
@@ -52,7 +53,7 @@ def compute_step_reward(
         )
     
     # ── Case 2: query executed successfully ──────────────────────────────────
-    result_score = grade_result_match(agent_result, expected_result)
+    result_score = grade_result_match(agent_result, expected_result, ground_truth_query)
     breakdown.result_match = result_score
     
     # Column-level partial credit

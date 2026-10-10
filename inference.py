@@ -28,6 +28,19 @@ sys.path.insert(0, os.path.dirname(__file__))
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 
+# Import retry module directly
+import benchmark.retry as retry_module
+RetryConfig = retry_module.RetryConfig
+RetryMetrics = retry_module.RetryMetrics
+make_api_request = retry_module.make_api_request
+RateLimitError = retry_module.RateLimitError
+AuthenticationError = retry_module.AuthenticationError
+BillingError = retry_module.BillingError
+TimeoutError = retry_module.TimeoutError
+ProviderUnavailableError = retry_module.ProviderUnavailableError
+InvalidResponseError = retry_module.InvalidResponseError
+ProviderError = retry_module.ProviderError
+
 # --- Configuration: ROBUST PROXY ALIGNMENT ---
 # Using .get() to prevent crash in validator environments where some keys might be missing
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://api-inference.huggingface.co/v1")
@@ -43,8 +56,6 @@ TEMPERATURE = 0.1
 
 # ── Rate Limit Protection ───────────────────────────────────────────────────
 RATE_LIMIT_DELAY = 8  # Seconds between API calls
-MAX_RETRIES = 3       # Max retries for 429 errors
-RETRY_WAIT = 10       # Seconds to wait between retries
 
 BENCHMARK_TASKS = [
     ("fix_syntax_simple",      "easy"),
@@ -125,13 +136,21 @@ def run_baseline() -> int:
             messages.append({"role": "user", "content": build_prompt(obs)})
             
             raw = ""
-            for attempt in range(MAX_RETRIES):
-                if use_fallback:
-                    print(f"Using fallback response (no API key)")
-                    raw = "SELECT 1 FROM dual"
-                    break
+            retry_config = RetryConfig(
+                max_retries=3,
+                base_delay=1.0,
+                max_delay=30.0,
+                exponential_base=2.0,
+                jitter_factor=0.1,
+                request_timeout=30.0,
+                respect_retry_after=True,
+            )
+            
+            if use_fallback:
+                print(f"Using fallback response (no API key)")
+                raw = "SELECT 1 FROM dual"
+            else:
                 try:
-                    # Make direct HTTP request to API
                     payload = {
                         "model": MODEL_NAME,
                         "messages": messages,
@@ -139,28 +158,35 @@ def run_baseline() -> int:
                         "temperature": TEMPERATURE,
                     }
                     
-                    resp = requests.post(
-                        f"{API_BASE_URL}/chat/completions",
+                    data, metrics, token_usage = make_api_request(
+                        url=f"{API_BASE_URL}/chat/completions",
                         headers=headers,
-                        json=payload,
-                        timeout=30
+                        payload=payload,
+                        config=retry_config,
+                        caller_name=MODEL_NAME,
                     )
+
+                    raw = data["choices"][0]["message"]["content"] or ""
+
+                    # Log retry metrics if there were retries
+                    if metrics.total_attempts > 1:
+                        print(f"  [METRICS] Attempts: {metrics.total_attempts} | "
+                              f"Delay: {metrics.total_delay_seconds:.2f}s")
                     
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        raw = data["choices"][0]["message"]["content"] or ""
-                        break # Success!
-                    else:
-                        raise Exception(f"HTTP {resp.status_code}: {resp.text}")
-                        
-                except Exception as e:
-                    print(f"  [RETRY {attempt+1}/{MAX_RETRIES}] Error calling API: {e}")
-                    if attempt < MAX_RETRIES - 1:
-                        time.sleep(RETRY_WAIT)
-                    else:
-                        print("  [FAIL] Max retries reached.")
-                        raw = "SELECT 1"
-                        break
+                except RateLimitError as e:
+                    print(f"  [FAIL] Rate limited after max retries")
+                    raw = "SELECT 1"
+                except (AuthenticationError, BillingError) as e:
+                    print(f"  [FAIL] {type(e).__name__}: {str(e)}")
+                    raw = "SELECT 1"
+                    break
+                except (TimeoutError, ProviderUnavailableError) as e:
+                    print(f"  [FAIL] Provider error after retries: {str(e)}")
+                    raw = "SELECT 1"
+                except (InvalidResponseError, ProviderError) as e:
+                    print(f"  [FAIL] API error: {str(e)}")
+                    raw = "SELECT 1"
+                    break
 
             sql = extract_sql(raw)
             messages.append({"role": "assistant", "content": raw})

@@ -128,6 +128,31 @@ class LeaderboardView(Base):
     last_updated = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class User(Base):
+    """User authentication model for SQLBench dashboard."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    
+    # User roles
+    is_admin = Column(Boolean, default=False, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    
+    # API rate limiting
+    api_calls_today = Column(Integer, default=0)
+    last_api_call_date = Column(DateTime, nullable=True)
+    
+    def __repr__(self):
+        return f"<User {self.username} ({self.email})>"
+
+
 # Helper functions for database operations
 def create_run_id():
     """Generate a unique run ID."""

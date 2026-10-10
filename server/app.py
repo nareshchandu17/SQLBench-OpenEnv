@@ -11,6 +11,8 @@ Serves:
   GET /health        → JSON: health status
 """
 
+from datetime import timedelta
+from benchmark.models import serialize_extra_data
 import json
 import uuid
 import asyncio
@@ -18,7 +20,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from fastapi import FastAPI, Body, BackgroundTasks
+from fastapi import FastAPI, Body, BackgroundTasks, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from dataclasses import asdict
@@ -26,10 +28,20 @@ from dataclasses import asdict
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 from sql_query_env.tasks import TASKS, TASK_INDEX
+from server.session_manager import session_manager
 
 # Database imports
 from database import init_db, get_db
-from benchmark.models import BenchmarkRun, BenchmarkSummary, LeaderboardView, ModelPerformance
+from benchmark.models import BenchmarkRun, BenchmarkSummary, LeaderboardView, ModelPerformance, User
+
+# Authentication imports
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from auth import (
+    authenticate_user, create_access_token, get_current_active_user,
+    get_current_admin_user, get_password_hash, create_default_admin,
+    ACCESS_TOKEN_EXPIRE_MINUTES
+)
+from sqlalchemy.orm import Session
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
@@ -54,8 +66,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Global Environment Instance ───────────────────────────────────────────
-
+# ── Global Environment Instance (DEPRECATED - Use Session Manager) ─────────
+# NOTE: The global env is kept for backward compatibility but should not be used.
+# New code should use session_manager for session-based isolation.
 env = SQLQueryEnv(seed=42)
 
 # ── Job Store for Background Benchmark Execution ───────────────────────
@@ -69,6 +82,26 @@ async def startup_event():
     """Initialize database tables on startup."""
     init_db()
     print("✅ Database initialized")
+    
+    # Create default admin user if no users exist
+    db = next(get_db())
+    admin = create_default_admin(db)
+    if admin:
+        print(f"✅ Default admin created: {admin.username} / password: admin")
+        print("⚠️  Change default password in production!")
+    
+    # Start background task for session cleanup
+    asyncio.create_task(session_cleanup_task())
+    print("✅ Session cleanup task started")
+
+
+async def session_cleanup_task():
+    """Background task to periodically clean up expired sessions."""
+    while True:
+        await asyncio.sleep(300)  # Run every 5 minutes
+        cleaned = session_manager.cleanup_expired_sessions()
+        if cleaned > 0:
+            print(f"🧹 Cleaned up {cleaned} expired sessions")
 
 # ── Helper Functions ───────────────────────────────────────────────────────
 
@@ -555,9 +588,9 @@ def generate_dashboard_html(
         for i, entry in enumerate(rankings, 1):
             model_name = escape_html(entry.get('model_name', 'Unknown'))
             model_id = entry.get('model_id', 'unknown')
-            easy = max(0.0, min(1.0, entry.get('easy', 0.0)))
-            medium = max(0.0, min(1.0, entry.get('medium', 0.0)))
-            hard = max(0.0, min(1.0, entry.get('hard', 0.0)))
+            easy = max(0.0, min(1.0, entry.get('easy_score', entry.get('easy', 0.0))))
+            medium = max(0.0, min(1.0, entry.get('medium_score', entry.get('medium', 0.0))))
+            hard = max(0.0, min(1.0, entry.get('hard_score', entry.get('hard', 0.0))))
             avg = max(0.0, min(1.0, entry.get('average_score', entry.get('average', 0.0))))
             
             # Rank badge class
@@ -1849,9 +1882,154 @@ def generate_dashboard_html(
                 padding: 16px;
             }}
         }}
+
+        /* Login Modal Styles */
+        .login-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }}
+
+        .login-modal.active {{
+            display: flex;
+        }}
+
+        .login-box {{
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }}
+
+        .login-box h2 {{
+            color: var(--text-primary);
+            margin: 0 0 24px 0;
+            font-size: 24px;
+            text-align: center;
+        }}
+
+        .login-input {{
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 14px;
+            box-sizing: border-box;
+        }}
+
+        .login-input:focus {{
+            outline: none;
+            border-color: #818cf8;
+        }}
+
+        .login-btn {{
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .login-btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.4);
+        }}
+
+        .login-error {{
+            color: #ef4444;
+            font-size: 14px;
+            margin-bottom: 16px;
+            text-align: center;
+            display: none;
+        }}
+
+        .user-menu {{
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .user-info {{
+            color: var(--text-secondary);
+            font-size: 14px;
+        }}
+
+        .logout-btn {{
+            padding: 8px 16px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-sm);
+            color: #ef4444;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .logout-btn:hover {{
+            background: rgba(239, 68, 68, 0.3);
+        }}
+
+        .login-trigger {{
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .login-trigger:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(129, 140, 248, 0.4);
+        }}
     </style>
 </head>
 <body>
+    <!-- User Menu -->
+    <div class="user-menu" id="userMenu">
+        <span class="user-info" id="userInfo"></span>
+        <!-- Login button removed -->
+        <button class="logout-btn" id="logoutBtn" onclick="logout()" style="display: none;">Logout</button>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="login-modal" id="loginModal">
+        <div class="login-box">
+            <h2>🔐 Admin Login</h2>
+            <div class="login-error" id="loginError">Invalid credentials</div>
+            <input type="text" class="login-input" id="username" placeholder="Username" value="admin">
+            <input type="password" class="login-input" id="password" placeholder="Password">
+            <button class="login-btn" onclick="login()">Sign In</button>
+            <p style="text-align: center; color: var(--text-secondary); font-size: 13px; margin-top: 16px;">
+                Default: admin / admin
+            </p>
+        </div>
+    </div>
+
     <!-- Animated Background -->
     <div class="bg-mesh"></div>
     <div class="particles" id="particles"></div>
@@ -2565,12 +2743,148 @@ async def health() -> Dict[str, str]:
     return {"status": "ok", "service": APP_TITLE}
 
 
+# ── Authentication API ────────────────────────────────────────────────────
+
+@app.post("/auth/login", response_class=JSONResponse)
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Login endpoint for user authentication.
+    Returns JWT access token on success.
+    """
+    user = authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Update last login
+    user.last_login = datetime.now()
+    db.commit()
+    
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "username": user.username,
+            "email": user.email,
+            "is_admin": user.is_admin,
+            "is_active": user.is_active
+        }
+    }
+
+
+@app.post("/auth/register", response_class=JSONResponse)
+async def register(
+    username: str = Body(...),
+    email: str = Body(...),
+    password: str = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+) -> Dict[str, Any]:
+    """
+    Register a new user (admin only).
+    Returns user info on success.
+    """
+    # Check if username already exists
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Check if email already exists
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    new_user = User(
+        username=username,
+        email=email,
+        hashed_password=get_password_hash(password),
+        is_admin=False,  # New users are not admins by default
+        is_active=True
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "message": "User created successfully",
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "is_admin": new_user.is_admin
+        }
+    }
+
+
+@app.get("/auth/me", response_class=JSONResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_active_user)
+) -> Dict[str, Any]:
+    """
+    Get current authenticated user information.
+    """
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "is_admin": current_user.is_admin,
+        "is_active": current_user.is_active,
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None
+    }
+
+
+@app.post("/auth/change-password", response_class=JSONResponse)
+async def change_password(
+    current_password: str = Body(...),
+    new_password: str = Body(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """
+    Change current user's password.
+    """
+    # Verify current password
+    if not authenticate_user(db, current_user.username, current_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    
+    return {"message": "Password changed successfully"}
+
+
 # ── Benchmark Execution API ─────────────────────────────────────────────────
 
 @app.post("/run-benchmark", response_class=JSONResponse)
-async def run_benchmark(background_tasks: BackgroundTasks) -> Dict[str, str]:
+async def run_benchmark(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_admin_user)
+) -> Dict[str, str]:
     """
     Start a new benchmark execution in the background.
+    Requires admin authentication.
     Returns job ID for tracking progress.
     """
     job_id = str(uuid.uuid4())
@@ -3057,9 +3371,147 @@ async def get_model_analytics(model_name: str) -> Dict[str, Any]:
 
 # ── OpenEnv Core API ───────────────────────────────────────────────────────
 
+# Session-based API (Recommended for production)
+@app.post("/session/create", response_class=JSONResponse)
+async def create_session(
+    user_id: Optional[str] = Body(None, embed=True),
+    seed: int = Body(42, embed=True)
+) -> Dict[str, str]:
+    """
+    Create a new session with an isolated environment.
+    
+    Each session has its own environment instance with no shared state.
+    Use the returned session_id for subsequent API calls.
+    """
+    session_id = session_manager.create_session(user_id=user_id, seed=seed)
+    return {"session_id": session_id}
+
+
+@app.post("/session/{session_id}/reset", response_class=JSONResponse)
+async def session_reset(
+    session_id: str,
+    task_id: Optional[str] = Body(None, embed=True)
+) -> Dict[str, Any]:
+    """
+    Reset the environment for a specific task within a session.
+    
+    Uses session-based isolation - each session has its own environment.
+    """
+    session = session_manager.get_session(session_id)
+    if not session:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Session {session_id} not found or expired"}
+        )
+    
+    try:
+        obs = session.env.reset(task_id=task_id)
+        return obs.model_dump()
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@app.post("/session/{session_id}/step", response_class=JSONResponse)
+async def session_step(
+    session_id: str,
+    query: str = Body(..., embed=True)
+) -> Dict[str, Any]:
+    """
+    Execute a SQL action within a session.
+    
+    Uses session-based isolation - each session has its own environment.
+    """
+    session = session_manager.get_session(session_id)
+    if not session:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Session {session_id} not found or expired"}
+        )
+    
+    try:
+        action = SQLAction(query=query)
+        obs, reward, done, info = session.env.step(action)
+        return {
+            "observation": obs.model_dump(),
+            "reward": reward.model_dump(),
+            "done": done,
+            "info": info
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+
+@app.get("/session/{session_id}/state", response_class=JSONResponse)
+async def session_get_state(session_id: str) -> Dict[str, Any]:
+    """
+    Get the current environment state within a session.
+    
+    Uses session-based isolation - each session has its own environment.
+    Returns public state (ground truth is NOT exposed).
+    """
+    session = session_manager.get_session(session_id)
+    if not session:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Session {session_id} not found or expired"}
+        )
+    
+    state = session.env.state()
+    return state.model_dump()
+
+
+@app.delete("/session/{session_id}", response_class=JSONResponse)
+async def delete_session(session_id: str) -> Dict[str, str]:
+    """
+    Delete a session and cleanup its environment.
+    
+    Releases resources associated with the session.
+    """
+    deleted = session_manager.delete_session(session_id)
+    if not deleted:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Session {session_id} not found"}
+        )
+    
+    return {"message": f"Session {session_id} deleted successfully"}
+
+
+@app.get("/sessions", response_class=JSONResponse)
+async def list_sessions() -> Dict[str, Any]:
+    """
+    List all active sessions (for debugging/monitoring).
+    
+    Returns session metadata without exposing internal state.
+    """
+    sessions = session_manager.get_all_sessions()
+    session_info = []
+    
+    for sid, session in sessions.items():
+        session_info.append({
+            "session_id": sid,
+            "user_id": session.user_id,
+            "created_at": session.created_at.isoformat(),
+            "last_activity": session.last_activity.isoformat(),
+        })
+    
+    return {
+        "count": len(session_info),
+        "sessions": session_info,
+    }
+
+
+# Legacy Global API (Deprecated - Use session-based API instead)
 @app.post("/reset", response_class=JSONResponse)
 async def reset(task_id: Optional[str] = Body(None, embed=True)) -> Dict[str, Any]:
-    """Reset the environment for a specific task."""
+    """
+    Reset the environment for a specific task.
+    
+    DEPRECATED: This uses a global environment instance.
+    Use /session/create and /session/{session_id}/reset for session isolation.
+    """
     try:
         obs = env.reset(task_id=task_id)
         return obs.model_dump()
@@ -3069,7 +3521,12 @@ async def reset(task_id: Optional[str] = Body(None, embed=True)) -> Dict[str, An
 
 @app.post("/step", response_class=JSONResponse)
 async def step(query: str = Body(..., embed=True)) -> Dict[str, Any]:
-    """Execute a SQL action and return the result."""
+    """
+    Execute a SQL action and return the result.
+    
+    DEPRECATED: This uses a global environment instance.
+    Use /session/create and /session/{session_id}/step for session isolation.
+    """
     try:
         action = SQLAction(query=query)
         obs, reward, done, info = env.step(action)
@@ -3087,7 +3544,12 @@ async def step(query: str = Body(..., embed=True)) -> Dict[str, Any]:
 
 @app.get("/state", response_class=JSONResponse)
 async def get_state() -> Dict[str, Any]:
-    """Get the current environment state (including ground truth for debugging)."""
+    """
+    Get the current environment state (including ground truth for debugging).
+    
+    DEPRECATED: This uses a global environment instance.
+    Use /session/create and /session/{session_id}/state for session isolation.
+    """
     state = env.state()
     return state.model_dump()
 

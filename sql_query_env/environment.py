@@ -10,7 +10,7 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 
 from .database import DatabaseManager
-from .models import SQLObservation, SQLAction, SQLReward, TaskState
+from .models import SQLObservation, SQLAction, SQLReward, TaskState, PublicTaskState
 from .tasks import TASKS, TASK_INDEX
 from .reward import compute_step_reward
 from .graders import compute_task_score
@@ -136,6 +136,7 @@ class SQLQueryEnv:
             max_steps=s.max_steps,
             task_difficulty=TASK_INDEX[s.task_id]["difficulty"],
             is_final_step=is_final,
+            ground_truth_query=s.ground_truth_query,
         )
         
         # Update best score
@@ -162,17 +163,36 @@ class SQLQueryEnv:
                 error_message=error_message or "",
                 query=action.query,
                 task_difficulty=TASK_INDEX[s.task_id]["difficulty"],
+                ground_truth_query=s.ground_truth_query,
             ),
             "solved": reward.success,
         }
         
+        # CRITICAL: Ensure ground truth is never exposed in info dict
+        # Remove any potential ground truth data from info before returning
+        info = {k: v for k, v in info.items() if k not in ("ground_truth_query", "expected_result")}
+        
         return obs, reward, reward.done, info
     
-    def state(self) -> TaskState:
-        """Return full internal state (includes ground truth, for debugging)."""
+    def state(self) -> PublicTaskState:
+        """
+        Return public internal state (without ground truth to prevent leakage).
+        
+        This is the ONLY method that should be used to expose state to agents.
+        It explicitly excludes ground_truth_query and expected_result.
+        """
         if not self._state:
             raise RuntimeError("Call reset() first.")
-        return self._state
+        
+        # Return a redacted state safe for agents
+        public_state = PublicTaskState(**self._state.model_dump(exclude={"ground_truth_query", "expected_result"}))
+        
+        # SECURITY: Verify no ground truth in public state
+        state_dict = public_state.model_dump()
+        if "ground_truth_query" in state_dict or "expected_result" in state_dict:
+            raise RuntimeError("SECURITY VIOLATION: Ground truth data leaked to public state!")
+        
+        return public_state
 
     def close(self):
         """Cleanup resources."""
@@ -189,7 +209,7 @@ class SQLQueryEnv:
         s = self._state
         task_def = TASK_INDEX[s.task_id]
         
-        return SQLObservation(
+        obs = SQLObservation(
             task_id=s.task_id,
             schema_ddl=s.schema_ddl,
             broken_query=s.broken_query,
@@ -202,3 +222,11 @@ class SQLQueryEnv:
                 str(last_result[:5]) if last_result else None
             ),  # Show first 5 rows only to keep context short
         )
+        
+        # SECURITY: Verify observation does not contain ground truth
+        # This is a runtime check to prevent accidental leakage
+        obs_dict = obs.model_dump()
+        if "ground_truth_query" in obs_dict or "expected_result" in obs_dict:
+            raise RuntimeError("SECURITY VIOLATION: Ground truth data leaked to agent observation!")
+        
+        return obs

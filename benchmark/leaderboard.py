@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from benchmark.runner import ModelResult
 from benchmark.error_taxonomy import ERROR_CATEGORIES
+from benchmark.metrics import compute_metrics_summary
 
 
 def generate_leaderboard(
@@ -22,6 +23,7 @@ def generate_leaderboard(
     - benchmark_results.json   (raw per-task data)
     - leaderboard.json         (ranked summary)
     - error_taxonomy.json      (failure analysis per model)
+    - metrics.json              (enhanced metrics with CI, percentiles, costs)
 
     Returns the leaderboard dict.
     """
@@ -48,6 +50,14 @@ def generate_leaderboard(
                     "error_category": tr.error_category,
                     "reward": tr.total_reward,
                     "seconds": tr.duration_seconds,
+                    "input_tokens": tr.input_tokens,
+                    "output_tokens": tr.output_tokens,
+                    "total_tokens": tr.total_tokens,
+                    "cost_usd": tr.cost_usd,
+                    "rate_limit_errors": tr.rate_limit_errors,
+                    "timeout_errors": tr.timeout_errors,
+                    "auth_errors": tr.auth_errors,
+                    "provider_errors": tr.provider_errors,
                 }
                 for tr in mr.task_results
             ],
@@ -56,7 +66,20 @@ def generate_leaderboard(
     with open(f"{output_dir}/benchmark_results.json", "w") as f:
         json.dump(raw, f, indent=2)
 
-    # ── 2. Leaderboard ────────────────────────────────────────────────────────
+    # ── 2. Enhanced metrics ────────────────────────────────────────────────────
+    metrics_summary = {}
+    for mr in results:
+        summary = compute_metrics_summary(mr.model_id, mr.model_name, mr.task_results)
+        metrics_summary[mr.model_id] = summary.to_dict()
+
+    with open(f"{output_dir}/metrics.json", "w") as f:
+        json.dump({
+            "benchmark": "SQLBench-OpenEnv",
+            "timestamp": raw["timestamp"],
+            "models": metrics_summary,
+        }, f, indent=2)
+
+    # ── 3. Leaderboard ────────────────────────────────────────────────────────
     leaderboard_entries = []
     for mr in results:
         by_diff = mr.score_by_difficulty()
@@ -65,7 +88,9 @@ def generate_leaderboard(
         medium_score = max(0.0, min(1.0, by_diff.get("medium", 0.0)))
         hard_score = max(0.0, min(1.0, by_diff.get("hard", 0.0)))
         avg_score = max(0.0, min(1.0, mr.average_score()))
-        
+
+        summary = metrics_summary.get(mr.model_id, {})
+
         leaderboard_entries.append({
             "rank": 0,  # filled after sort
             "model_id": mr.model_id,
@@ -74,8 +99,14 @@ def generate_leaderboard(
             "medium": medium_score,
             "hard": hard_score,
             "average_score": avg_score,  # Match server.py field name
-            "solved_count": sum(1 for tr in mr.task_results if tr.solved),
-            "total_tasks": len(mr.task_results),
+            "solved_count": summary.get("solve_metrics", {}).get("solved_count", 0),
+            "total_tasks": summary.get("solve_metrics", {}).get("total_tasks", 0),
+            "solve_rate": summary.get("solve_metrics", {}).get("solve_rate", 0.0),
+            "solve_rate_ci_95": summary.get("solve_metrics", {}).get("solve_rate_ci_95"),
+            "score_ci_95": summary.get("score_metrics", {}).get("score_ci_95"),
+            "p50_latency": summary.get("latency_metrics", {}).get("p50_latency", 0.0),
+            "p95_latency": summary.get("latency_metrics", {}).get("p95_latency", 0.0),
+            "total_cost_usd": summary.get("cost_metrics", {}).get("total_cost_usd", 0.0),
         })
 
     leaderboard_entries.sort(key=lambda x: x["average_score"], reverse=True)
@@ -93,7 +124,7 @@ def generate_leaderboard(
     except IOError as e:
         print(f"Warning: Could not write leaderboard: {e}")
 
-    # ── 3. Error taxonomy ─────────────────────────────────────────────────────
+    # ── 4. Error taxonomy ─────────────────────────────────────────────────────
     taxonomy = {
         "benchmark": "SQLBench-OpenEnv",
         "timestamp": raw["timestamp"],
@@ -170,26 +201,48 @@ def print_leaderboard(leaderboard: Dict[str, Any]) -> None:
     """Print a formatted ASCII leaderboard to stdout."""
     rankings = leaderboard["rankings"]
 
-    print(f"\n{'='*70}")
+    print(f"\n{'='*80}")
     print(f"  SQLBench-OpenEnv — Leaderboard")
     print(f"  {leaderboard['timestamp']}")
-    print(f"{'='*70}")
-    print(f"  {'#':<4} {'Model':<30} {'Easy':>6} {'Medium':>8} {'Hard':>6} {'Avg':>6}")
-    print(f"  {'─'*60}")
+    print(f"{'='*80}")
+    print(f"  {'#':<4} {'Model':<30} {'Solve':>6} {'Easy':>6} {'Med':>6} {'Hard':>6} {'Avg':>6}")
+    print(f"  {'─'*70}")
 
     bar_chars = "█"
     for entry in rankings:
         bar_len = int(entry["average_score"] * 20)
         bar = bar_chars * bar_len
-        solved = f"{entry['solved_count']}/{entry['total_tasks']}"
+        solve_rate = entry.get("solve_rate", 0.0)
         print(
             f"  {entry['rank']:<4}"
             f"{entry['model_name']:<30}"
+            f"{solve_rate:>6.1%}"
             f"{entry['easy']:>6.3f}"
-            f"{entry['medium']:>8.3f}"
+            f"{entry['medium']:>6.3f}"
             f"{entry['hard']:>6.3f}"
             f"{entry['average_score']:>6.3f}"
-            f"  {bar:<20} ({solved} solved)"
+            f"  {bar:<20}"
         )
 
-    print(f"{'='*70}\n")
+    print(f"{'='*80}\n")
+
+    # Print enhanced metrics summary
+    print(f"  Enhanced Metrics Summary")
+    print(f"  {'─'*80}")
+    for entry in rankings:
+        print(f"\n  {entry['rank']}. {entry['model_name']}")
+        solve_ci = entry.get("solve_rate_ci_95")
+        score_ci = entry.get("score_ci_95")
+        p50 = entry.get("p50_latency", 0.0)
+        p95 = entry.get("p95_latency", 0.0)
+        cost = entry.get("total_cost_usd", 0.0)
+
+        if solve_ci is not None:
+            print(f"    Solve Rate: {entry.get('solve_rate', 0.0):.1%} ± {solve_ci:.1%} (95% CI)")
+        if score_ci is not None:
+            print(f"    Avg Score: {entry['average_score']:.3f} ± {score_ci:.3f} (95% CI)")
+        print(f"    Latency: P50={p50:.3f}s, P95={p95:.3f}s")
+        if cost > 0:
+            print(f"    Total Cost: ${cost:.6f}")
+
+    print(f"\n{'='*80}\n")

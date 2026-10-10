@@ -31,15 +31,27 @@ load_dotenv()
 if not os.getenv("OPENROUTER_API_KEY"):
     print("⚠ WARNING: OPENROUTER_API_KEY not found in environment")
     print("Available env vars with 'API' or 'KEY':")
-    for key, value in os.environ.items():
+    for key in os.environ.keys():
         if 'API' in key.upper() or 'KEY' in key.upper():
-            print(f"  {key}: {value[:20]}..." if len(value) > 20 else f"  {key}: {value}")
+            print(f"  {key}: [REDACTED]")
     print("")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from sql_query_env.environment import SQLQueryEnv
 from sql_query_env.models import SQLAction
 from benchmark.error_taxonomy import ErrorCounts, classify_error
+from benchmark.retry import (
+    RetryConfig,
+    RetryMetrics,
+    make_api_request,
+    RateLimitError,
+    AuthenticationError,
+    BillingError,
+    TimeoutError,
+    ProviderUnavailableError,
+    InvalidResponseError,
+    ProviderError,
+)
 
 # ── Rate Limit Protection ───────────────────────────────────────────────────
 LAST_REQUEST_TIME = 0
@@ -53,43 +65,6 @@ def throttle():
     if elapsed < MIN_INTERVAL:
         time.sleep(MIN_INTERVAL - elapsed)
     LAST_REQUEST_TIME = time.time()
-
-def retry_with_backoff(api_call, model_name: str, max_retries: int = 5):
-    """
-    Production-grade retry with exponential backoff and rate limit awareness.
-    """
-    for attempt in range(max_retries):
-        try:
-            return api_call()
-        except Exception as e:
-            err_msg = str(e)
-            
-            # Check for rate limit errors
-            if "429" in err_msg or "rate limit" in err_msg.lower():
-                # Exponential backoff with jitter (capped at 60s)
-                wait = min(60, (2 ** attempt) + random.uniform(0, 1))
-                
-                # Check for Retry-After header if available
-                if hasattr(e, 'response') and hasattr(e.response, 'headers'):
-                    retry_after = e.response.headers.get("Retry-After")
-                    if retry_after:
-                        try:
-                            wait = max(wait, float(retry_after))
-                        except ValueError:
-                            pass
-                
-                print(f"[RETRY] {model_name} | Attempt {attempt + 1}/{max_retries} | Rate limited. Waiting {wait:.2f}s...")
-                time.sleep(wait)
-                
-                if attempt == max_retries - 1:
-                    raise Exception(f"Max retries exceeded for {model_name} due to rate limiting")
-            else:
-                # Non-rate-limit error, re-raise immediately
-                raise
-    
-    raise Exception(f"Max retries exceeded for {model_name}")
-
-MAX_RETRIES = 5  # Increased for better resilience
 
 # ── Prompt (identical across all models for fair comparison) ──────────────────
 SYSTEM_PROMPT = textwrap.dedent("""
@@ -146,6 +121,15 @@ class TaskResult:
     total_reward: float
     duration_seconds: float
     api_errors: List[str] = field(default_factory=list)
+    # Enhanced metrics
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+    rate_limit_errors: int = 0
+    timeout_errors: int = 0
+    auth_errors: int = 0
+    provider_errors: int = 0
 
 
 @dataclass
@@ -197,10 +181,8 @@ class BenchmarkRunner:
         # Priority: 1. Direct parameter, 2. Environment variable, 3. .env file
         api_key_env = self.config.get("api_key_env", "OPENROUTER_API_KEY")
         
-        # HARD DEBUG: Print full API key info
+        # Load API key from environment
         raw_key = os.environ.get(api_key_env, "")
-        print("DEBUG_API_KEY_FULL:", repr(raw_key))
-        print("DEBUG_API_KEY_ENV:", api_key_env)
         
         self.default_api_key = api_key or raw_key.strip()
         
@@ -210,7 +192,6 @@ class BenchmarkRunner:
             from dotenv import load_dotenv
             load_dotenv()
             self.default_api_key = os.environ.get(api_key_env, "").strip()
-            print("DEBUG_API_KEY_AFTER_ENV:", repr(self.default_api_key))
         
         # SANITIZE API KEY - Add validation
         if not self.default_api_key:
@@ -219,7 +200,7 @@ class BenchmarkRunner:
         if not self.default_api_key.startswith("sk-or-v1-"):
             raise ValueError(f"Invalid OpenRouter API key format. Expected 'sk-or-v1-*', got: {self.default_api_key[:20]}...")
         
-        print(f"[DEBUG] Using API key: {self.default_api_key[:8]}... (length: {len(self.default_api_key)})")
+        print(f"[DEBUG] credential_configured=true (length: {len(self.default_api_key)})")
         # Don't create shared env — each thread will create its own
         # to avoid SQLite threading issues
         self.max_steps = self.config["settings"]["max_steps_per_episode"]
@@ -278,50 +259,94 @@ class BenchmarkRunner:
         steps = 0
 
         api_errors = []
+        # Track token usage and error counts
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_tokens = 0
+        total_rate_limit_errors = 0
+        total_timeout_errors = 0
+        total_auth_errors = 0
+        total_provider_errors = 0
         for step in range(self.max_steps):
             # 1. Apply global throttling
             throttle()
             
             messages.append({"role": "user", "content": build_user_prompt(obs)})
 
-            # 2. Make API call with exponential backoff
+            # 2. Make API call with new retry system
             raw = ""
+            retry_config = RetryConfig(
+                max_retries=5,
+                base_delay=1.0,
+                max_delay=60.0,
+                exponential_base=2.0,
+                jitter_factor=0.1,
+                request_timeout=30.0,
+                respect_retry_after=True,
+            )
+            
             try:
-                def api_call():
-                    payload = {
-                        "model": model_cfg["model_string"],
-                        "messages": messages,
-                        "max_tokens": model_cfg.get("max_tokens", 512),
-                        "temperature": model_cfg.get("temperature", 0.1),
-                    }
-                    
-                    resp = requests.post(
-                        f"{client_config['base_url']}/chat/completions",
-                        headers=client_config["headers"],
-                        json=payload,
-                        timeout=30
-                    )
-                    
-                    if resp.status_code == 200:
-                        return resp.json()
-                    else:
-                        raise Exception(f"HTTP {resp.status_code}: {resp.text}")
+                payload = {
+                    "model": model_cfg["model_string"],
+                    "messages": messages,
+                    "max_tokens": model_cfg.get("max_tokens", 512),
+                    "temperature": model_cfg.get("temperature", 0.1),
+                }
                 
-                data = retry_with_backoff(api_call, model_cfg["name"])
-                raw = data["choices"][0]["message"]["content"] or ""
-                
-            except Exception as e:
-                err_msg = str(e)
-                if "Max retries exceeded" in err_msg:
-                    # Rate limit exhaustion - mark as rate limited but continue
-                    api_errors.append(f"Step {step+1}: Rate limited after max retries")
-                    raw = f"SELECT * FROM sqlite_master LIMIT 0"
-                    print(f"[RATE_LIMITED] {model_cfg['name']} - Step {step+1} exhausted rate limits")
+                data, metrics, token_usage = make_api_request(
+                    url=f"{client_config['base_url']}/chat/completions",
+                    headers=client_config["headers"],
+                    payload=payload,
+                    config=retry_config,
+                    caller_name=model_cfg["name"],
+                )
+
+                content = data["choices"][0]["message"].get("content")
+                if content is None:
+                    raw = ""
                 else:
-                    # Other API error
-                    api_errors.append(f"Step {step+1}: {err_msg}")
-                    raw = f"SELECT * FROM sqlite_master LIMIT 0"
-                    break
+                    raw = str(content)
+
+                # Track token usage
+                total_input_tokens += token_usage["input_tokens"]
+                total_output_tokens += token_usage["output_tokens"]
+                total_tokens += token_usage["total_tokens"]
+
+                # Track error counts
+                total_rate_limit_errors += metrics.rate_limit_errors
+                total_timeout_errors += metrics.timeout_errors
+                total_auth_errors += metrics.authentication_errors
+                total_provider_errors += metrics.provider_unavailable_errors
+
+                # Log retry metrics if there were retries
+                if metrics.total_attempts > 1:
+                    print(f"  [METRICS] {model_cfg['name']} | Attempts: {metrics.total_attempts} | "
+                          f"Delay: {metrics.total_delay_seconds:.2f}s | "
+                          f"Errors: {metrics.rate_limit_errors} rate limit, "
+                          f"{metrics.timeout_errors} timeout, "
+                          f"{metrics.provider_unavailable_errors} unavailable")
+                
+            except RateLimitError as e:
+                # Rate limit exhaustion - mark as rate limited but continue
+                api_errors.append(f"Step {step+1}: Rate limited after max retries")
+                raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                print(f"[RATE_LIMITED] {model_cfg['name']} - Step {step+1} exhausted rate limits")
+            except AuthenticationError as e:
+                api_errors.append(f"Step {step+1}: Authentication failed - {str(e)}")
+                raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                break
+            except BillingError as e:
+                api_errors.append(f"Step {step+1}: Billing error - {str(e)}")
+                raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                break
+            except (TimeoutError, ProviderUnavailableError) as e:
+                api_errors.append(f"Step {step+1}: Provider error after retries - {str(e)}")
+                raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                break
+            except (InvalidResponseError, ProviderError) as e:
+                api_errors.append(f"Step {step+1}: API error - {str(e)}")
+                raw = f"SELECT * FROM sqlite_master LIMIT 0"
+                break
 
             sql = extract_sql(raw)
             messages.append({"role": "assistant", "content": raw})
@@ -359,6 +384,11 @@ class BenchmarkRunner:
         )
 
         duration = time.time() - t0
+
+        # Simple cost estimation (OpenRouter-style pricing, can be customized)
+        # Default: $0.001 per 1K input tokens, $0.002 per 1K output tokens
+        cost_usd = (total_input_tokens * 0.001 / 1000) + (total_output_tokens * 0.002 / 1000)
+
         return TaskResult(
             task_id=task_id,
             difficulty=difficulty,
@@ -369,6 +399,14 @@ class BenchmarkRunner:
             total_reward=round(total_reward, 3),
             duration_seconds=round(duration, 1),
             api_errors=api_errors,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            total_tokens=total_tokens,
+            cost_usd=round(cost_usd, 6),
+            rate_limit_errors=total_rate_limit_errors,
+            timeout_errors=total_timeout_errors,
+            auth_errors=total_auth_errors,
+            provider_errors=total_provider_errors,
         )
 
     def run(self) -> List[ModelResult]:
