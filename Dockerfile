@@ -26,8 +26,7 @@ COPY pyproject.toml .
 COPY uv.lock .
 
 # Use pip cache and install dependencies efficiently
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir -r requirements.txt && \
     pip install -e . && \
     rm -rf /root/.cache/pip
 

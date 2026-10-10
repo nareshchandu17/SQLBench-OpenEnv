@@ -34,7 +34,7 @@ test = [
 server = "server.app:main"
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=69.0.0,<80.0.0", "wheel"]
 build-backend = "setuptools.buildmeta"
 
 [tool.setuptools]
