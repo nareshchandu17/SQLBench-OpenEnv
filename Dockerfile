@@ -27,7 +27,7 @@ COPY uv.lock .
 
 # Use pip cache and install dependencies efficiently
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install -e . && \
+    pip install --no-build-isolation -e . && \
     rm -rf /root/.cache/pip
 
 # Copy application code (exclude unnecessary files)
